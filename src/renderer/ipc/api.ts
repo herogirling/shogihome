@@ -326,10 +326,27 @@ export function isNative(): boolean {
   return !!getWindowObject().electronShogiAPI;
 }
 
-export function isMobileWebApp(): boolean {
+// 起動時に一度だけ Web モバイル判定を確定する。
+function detectInitialMobileWebApp(): boolean {
   if (isNative()) {
     return false;
   }
   const urlParams = new URL(window.location.toString()).searchParams;
-  return urlParams.has("mobile");
+  if (urlParams.has("mobile")) {
+    return true;
+  }
+  if (urlParams.has("desktop")) {
+    return false;
+  }
+  const nav = window.navigator as Navigator & { standalone?: boolean };
+  const isStandalone =
+    nav.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+  const hasTouch = nav.maxTouchPoints > 0 || window.matchMedia("(pointer: coarse)").matches;
+  return isStandalone && hasTouch;
+}
+
+const initialMobileWebApp = detectInitialMobileWebApp();
+
+export function isMobileWebApp(): boolean {
+  return initialMobileWebApp;
 }

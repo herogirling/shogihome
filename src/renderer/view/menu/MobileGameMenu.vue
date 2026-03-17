@@ -16,6 +16,15 @@
           <Icon :icon="IconType.ROBOT" />
           <div class="label">{{ `${t.beginner} (${t.rangingRook})` }}</div>
         </button>
+        <button
+          v-for="engine of gameEngines"
+          v-if="!playerURI"
+          :key="engine.uri"
+          @click="selectPlayer(engine.uri)"
+        >
+          <Icon :icon="IconType.ROBOT" />
+          <div class="label">{{ engine.name }}</div>
+        </button>
         <button v-if="playerURI" @click="selectTurn(Color.BLACK)">
           <Icon :icon="IconType.GAME" />
           <div class="label">{{ t.sente }}</div>
@@ -46,12 +55,17 @@ import { installHotKeyForDialog, uninstallHotKeyForDialog } from "@/renderer/dev
 import { showModalDialog } from "@/renderer/helpers/dialog";
 import { useStore } from "@/renderer/store";
 import { Color, InitialPositionType } from "tsshogi";
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { SearchCommentFormat } from "@/common/settings/comment";
+import api from "@/renderer/ipc/api";
+import { getPredefinedUSIEngineTag, USIEngine, USIEngines } from "@/common/settings/usi";
+import { PlayerSettings } from "@/common/settings/player";
+import { useErrorStore } from "@/renderer/store/error";
 
 const store = useStore();
 const dialog = ref();
 const playerURI = ref("");
+const usiEngines = ref(new USIEngines());
 const emit = defineEmits<{
   close: [];
 }>();
@@ -61,6 +75,14 @@ const onClose = () => {
 onMounted(() => {
   showModalDialog(dialog.value, onClose);
   installHotKeyForDialog(dialog.value);
+  api
+    .loadUSIEngines()
+    .then((engines) => {
+      usiEngines.value = engines;
+    })
+    .catch((e) => {
+      useErrorStore().add(e);
+    });
 });
 onBeforeUnmount(() => {
   uninstallHotKeyForDialog(dialog.value);
@@ -68,9 +90,37 @@ onBeforeUnmount(() => {
 const selectPlayer = (uri: string) => {
   playerURI.value = uri;
 };
+
+const gameTag = computed(() => getPredefinedUSIEngineTag("game"));
+
+const gameEngines = computed(() => {
+  // 対局用タグが付いたエンジンだけを表示して誤選択を減らす。
+  return usiEngines.value.engineList
+    .filter((engine) => (engine.tags || []).includes(gameTag.value))
+    .map((engine) => ({
+      uri: engine.uri,
+      name: engine.name || engine.defaultName,
+    }));
+});
+
+const buildPlayerSettings = (playerURI: string): PlayerSettings => {
+  if (uri.isUSIEngine(playerURI) && usiEngines.value.hasEngine(playerURI)) {
+    const engine = usiEngines.value.getEngine(playerURI) as USIEngine;
+    return {
+      name: engine.name,
+      uri: playerURI,
+      usi: engine,
+    };
+  }
+  return {
+    name: uri.isBasicEngine(playerURI) ? uri.basicEngineName(playerURI) : t.human,
+    uri: playerURI,
+  };
+};
+
 const selectTurn = (turn: Color) => {
-  let black = { name: t.human, uri: uri.ES_HUMAN };
-  let white = { name: uri.basicEngineName(playerURI.value), uri: playerURI.value };
+  let black = buildPlayerSettings(uri.ES_HUMAN);
+  let white = buildPlayerSettings(playerURI.value);
   if (turn === Color.WHITE) {
     [black, white] = [white, black];
   }
