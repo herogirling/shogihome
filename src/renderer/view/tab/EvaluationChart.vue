@@ -21,7 +21,6 @@ import { EvaluationChartType } from "@/common/settings/layout";
 
 const MATE_SCORE = 1000000;
 const MAX_SCORE = 2000;
-const MIN_SCORE = -MAX_SCORE;
 
 enum Series {
   BLACK_PLAYER,
@@ -91,10 +90,45 @@ function getScore(
   }
   switch (type) {
     case EvaluationChartType.RAW:
-      return Math.min(Math.max(score, MIN_SCORE), MAX_SCORE);
+      return Math.min(Math.max(score, -MAX_SCORE), MAX_SCORE);
     case EvaluationChartType.WIN_RATE:
       return scoreToPercentage(score, coefficientInSigmoid);
   }
+}
+
+function getRawAxisLimit(record: ImmutableRecord): number {
+  // 記録内の最大絶対値に応じて軸レンジを段階的に決め、極端な圧縮を避ける。
+  let maxAbs = 0;
+  for (const node of record.moves) {
+    const data = node.customData as RecordCustomData | undefined;
+    if (!data) {
+      continue;
+    }
+    const searchInfos = [
+      data.playerSearchInfo,
+      data.opponentSearchInfo,
+      data.researchInfo,
+      data.researchInfo2,
+      data.researchInfo3,
+      data.researchInfo4,
+    ];
+    for (const searchInfo of searchInfos) {
+      if (!searchInfo) {
+        continue;
+      }
+      const score = searchInfo.mate !== undefined ? MATE_SCORE : searchInfo.score;
+      if (score !== undefined) {
+        maxAbs = Math.max(maxAbs, Math.abs(score));
+      }
+    }
+  }
+  if (maxAbs < 500) {
+    return 500;
+  }
+  if (maxAbs < 1000) {
+    return 1000;
+  }
+  return 2000;
 }
 
 type ColorPalette = {
@@ -177,12 +211,12 @@ const canvas = ref();
 const store = useStore();
 let chart: Chart;
 
-const getMaxScore = (type: EvaluationChartType) => {
-  return type === EvaluationChartType.RAW ? MAX_SCORE : 100;
+const getMaxScore = (type: EvaluationChartType, record: ImmutableRecord) => {
+  return type === EvaluationChartType.RAW ? getRawAxisLimit(record) : 100;
 };
 
-const getMinScore = (type: EvaluationChartType) => {
-  return type === EvaluationChartType.RAW ? MIN_SCORE : 0;
+const getMinScore = (type: EvaluationChartType, record: ImmutableRecord) => {
+  return type === EvaluationChartType.RAW ? -getRawAxisLimit(record) : 0;
 };
 
 const buildDataset = (
@@ -239,8 +273,8 @@ const verticalLine = (
     label: t.currentPosition,
     borderColor: palette.head,
     data: [
-      { x: record.current.ply, y: getMaxScore(type) },
-      { x: record.current.ply, y: getMinScore(type) },
+      { x: record.current.ply, y: getMaxScore(type, record) },
+      { x: record.current.ply, y: getMinScore(type, record) },
     ],
     showLine: true,
     pointBorderWidth: 0,
@@ -268,7 +302,8 @@ const buildDatasets = (record: ImmutableRecord, config: ChartConfig) => {
 };
 
 const buildScalesOption = (record: ImmutableRecord, config: ChartConfig) => {
-  const stepSize = config.type === EvaluationChartType.RAW ? MAX_SCORE / 2 : 25;
+  const rawAxisLimit = config.type === EvaluationChartType.RAW ? getRawAxisLimit(record) : 0;
+  const stepSize = config.type === EvaluationChartType.RAW ? rawAxisLimit / 2 : 25;
   return {
     x: {
       min: 0,
@@ -277,8 +312,8 @@ const buildScalesOption = (record: ImmutableRecord, config: ChartConfig) => {
       grid: { color: config.palette.grid },
     },
     y: {
-      min: getMinScore(config.type),
-      max: getMaxScore(config.type),
+      min: getMinScore(config.type, record),
+      max: getMaxScore(config.type, record),
       ticks: { color: config.palette.ticks, stepSize },
       grid: { color: config.palette.grid },
     },

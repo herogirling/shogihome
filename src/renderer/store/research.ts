@@ -130,9 +130,18 @@ export class ResearchManager {
         if (engine.paused) {
           return;
         }
-        engine.usi.startResearch(record.position, record.usi).catch((e) => {
-          this.onError(e);
-        });
+        // 旧局面の探索が残っていると info が混線するエンジンがあるため、
+        // 局面更新時は stop 後に新局面で再投入する。
+        engine.usi
+          .stop()
+          .catch(() => {
+            // stop failure is non-fatal; startResearch below will re-issue position/go.
+          })
+          .finally(() => {
+            engine.usi.startResearch(record.position, record.usi).catch((e) => {
+              this.onError(e);
+            });
+          });
         // タイマーを初期化する。
         this.setupTimer(engine);
       });

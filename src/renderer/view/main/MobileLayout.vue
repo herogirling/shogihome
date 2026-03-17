@@ -1,7 +1,19 @@
 <template>
-  <div class="full">
-    <div class="full row">
+  <div class="full mobile-layout-root">
+    <div class="full row layout-main-row">
       <div class="column">
+        <div
+          class="evaluation-rate-bar"
+          :style="{
+            width: `${windowSize.width}px`,
+            height: `${evaluationBarHeight}px`,
+          }"
+        >
+          <div class="bar" :style="{ background: evaluationBarBackground }">
+            <div class="sente-text">{{ senteDisplayText }}</div>
+            <div class="gote-text">{{ goteDisplayText }}</div>
+          </div>
+        </div>
         <BoardPane
           :max-size="boardPaneMaxSize"
           :layout-type="boardLayoutType"
@@ -9,10 +21,12 @@
         />
         <MobileControls
           v-if="showRecordViewOnBottom"
+          class="no-horizontal-swipe"
           :style="{ height: `${controlPaneHeight}px` }"
         />
         <RecordPane
           v-if="showRecordViewOnBottom"
+          class="no-horizontal-swipe"
           v-show="bottomUIType === BottomUIType.RECORD"
           :style="{
             width: `${windowSize.width}px`,
@@ -25,35 +39,60 @@
         />
         <RecordComment
           v-if="showRecordViewOnBottom"
+          class="no-horizontal-swipe"
           v-show="bottomUIType === BottomUIType.COMMENT"
           :style="{
             width: `${windowSize.width}px`,
             height: `${bottomViewSize.height}px`,
           }"
         />
-        <RecordInfo
+        <MobileResearchTable
           v-if="showRecordViewOnBottom"
-          v-show="bottomUIType === BottomUIType.INFO"
+          class="no-horizontal-swipe"
+          v-show="bottomUIType === BottomUIType.RESEARCH"
+          :style="{
+            width: `${windowSize.width}px`,
+            height: `${bottomViewSize.height}px`,
+          }"
           :size="bottomViewSize"
+          :coefficient-in-sigmoid="appSettings.coefficientInSigmoid"
+          :active="bottomUIType === BottomUIType.RESEARCH"
+        />
+        <EvaluationChart
+          v-if="showRecordViewOnBottom"
+          class="no-horizontal-swipe"
+          v-show="bottomUIType === BottomUIType.CHART"
+          :style="{
+            width: `${windowSize.width}px`,
+            height: `${bottomViewSize.height}px`,
+          }"
+          :size="bottomViewSize"
+          :thema="appSettings.thema"
+          :coefficient-in-sigmoid="appSettings.coefficientInSigmoid"
+          :type="EvaluationChartType.RAW"
+          :show-legend="false"
         />
         <HorizontalSelector
           v-if="showRecordViewOnBottom"
+          class="no-horizontal-swipe bottom-tab-selector"
           v-model:value="bottomUIType"
           :items="[
             { label: t.record, value: BottomUIType.RECORD },
             { label: t.comments, value: BottomUIType.COMMENT },
-            { label: t.recordProperties, value: BottomUIType.INFO },
+            { label: t.research, value: BottomUIType.RESEARCH },
+            { label: t.chart, value: BottomUIType.CHART },
           ]"
           :height="selectorHeight"
         />
       </div>
       <div
         v-if="!showRecordViewOnBottom"
-        class="column"
+        class="column no-horizontal-swipe"
         :style="{ width: `${windowSize.width - boardPaneSize.width}px` }"
       >
-        <MobileControls :style="{ height: `${controlPaneHeight}px` }" />
+        <MobileControls class="no-horizontal-swipe" :style="{ height: `${controlPaneHeight}px` }" />
         <RecordPane
+          class="no-horizontal-swipe"
           v-show="sideUIType === SideUIType.RECORD"
           :style="{ height: `${sideViewSize.height * 0.6}px` }"
           :show-top-control="false"
@@ -62,18 +101,30 @@
           :show-comment="true"
         />
         <RecordComment
+          class="no-horizontal-swipe"
           v-show="sideUIType === SideUIType.RECORD"
           :style="{
             'margin-top': '5px',
             height: `${sideViewSize.height * 0.4 - 5}px`,
           }"
         />
-        <RecordInfo v-show="sideUIType === SideUIType.INFO" :size="sideViewSize" />
+        <MobileResearchTable
+          class="no-horizontal-swipe"
+          v-show="sideUIType === SideUIType.RESEARCH"
+          :style="{
+            width: `${sideViewSize.width}px`,
+            height: `${sideViewSize.height}px`,
+          }"
+          :size="sideViewSize"
+          :coefficient-in-sigmoid="appSettings.coefficientInSigmoid"
+          :active="sideUIType === SideUIType.RESEARCH"
+        />
         <HorizontalSelector
+          class="no-horizontal-swipe"
           v-model:value="sideUIType"
           :items="[
             { label: t.record, value: SideUIType.RECORD },
-            { label: t.recordProperties, value: SideUIType.INFO },
+            { label: t.research, value: SideUIType.RESEARCH },
           ]"
           :height="selectorHeight"
         />
@@ -86,27 +137,35 @@
 enum BottomUIType {
   RECORD = "record",
   COMMENT = "comment",
-  INFO = "info",
+  RESEARCH = "research",
+  CHART = "chart",
 }
 enum SideUIType {
   RECORD = "record",
-  INFO = "info",
+  RESEARCH = "research",
 }
 </script>
 
 <script setup lang="ts">
 import { RectSize } from "@/common/assets/geometry";
 import { BoardLayoutType } from "@/common/settings/layout";
+import { EvaluationChartType } from "@/common/settings/layout";
 import { Lazy } from "@/common/helpers/lazy";
 import BoardPane from "@/renderer/view/main/BoardPane.vue";
 import RecordPane from "@/renderer/view/main/RecordPane.vue";
-import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import MobileControls from "./MobileControls.vue";
 import RecordComment from "@/renderer/view/tab/RecordComment.vue";
 import HorizontalSelector from "@/renderer/view/primitive/HorizontalSelector.vue";
 import { t } from "@/common/i18n";
-import RecordInfo from "@/renderer/view/tab/RecordInfo.vue";
 import { isIOS } from "@/renderer/helpers/env";
+import EvaluationChart from "@/renderer/view/tab/EvaluationChart.vue";
+import { useAppSettings } from "@/renderer/store/settings";
+import { useStore } from "@/renderer/store";
+import { scoreToPercentage } from "@/renderer/record/score";
+import { RecordCustomData } from "@/renderer/record/manager";
+import MobileResearchTable from "@/renderer/view/tab/MobileResearchTable.vue";
+import { AppState, ResearchState } from "@/common/control/state";
 
 const lazyUpdateDelay = 80;
 const selectorHeight = 30;
@@ -120,6 +179,8 @@ const safeAreaMarginY = isIOS() ? 21 : 10;
 const windowSize = reactive(new RectSize(window.innerWidth, window.innerHeight - safeAreaMarginY));
 const bottomUIType = ref(BottomUIType.RECORD);
 const sideUIType = ref(SideUIType.RECORD);
+const appSettings = useAppSettings();
+const store = useStore();
 
 const windowLazyUpdate = new Lazy();
 const updateSize = () => {
@@ -130,13 +191,69 @@ const updateSize = () => {
 };
 
 const showRecordViewOnBottom = computed(() => windowSize.height >= windowSize.width);
+const evaluationBarHeight = computed(() => controlPaneHeight.value * (2 / 3));
+const controlPaneBaseHeight = computed(() => Math.min(windowSize.height * 0.08, windowSize.width * 0.12));
 const controlPaneHeight = computed(() =>
-  Math.min(windowSize.height * 0.08, windowSize.width * 0.12),
+  Math.max(36, controlPaneBaseHeight.value * 0.64),
 );
+
+// 現局面で利用可能な評価値を優先順で取り出す。
+const evalInCurrentPosition = computed(() => {
+  const data = store.record.current.customData as RecordCustomData | undefined;
+  const info = data?.researchInfo || data?.playerSearchInfo || data?.opponentSearchInfo;
+  return {
+    score: info?.score,
+    mate: info?.mate,
+  };
+});
+
+const senteWinRate = computed(() => {
+  const mate = evalInCurrentPosition.value.mate;
+  const score = evalInCurrentPosition.value.score;
+  if (mate !== undefined) {
+    return mate > 0 ? 100 : 0;
+  }
+  if (score === undefined) {
+    return 50;
+  }
+  return Math.round(scoreToPercentage(score, appSettings.coefficientInSigmoid));
+});
+
+const goteWinRate = computed(() => {
+  return 100 - senteWinRate.value;
+});
+
+const senteDisplayText = computed(() => {
+  const mate = evalInCurrentPosition.value.mate;
+  if (mate !== undefined) {
+    const ply = Math.abs(mate);
+    return `${senteWinRate.value}%(詰${ply >= 999999 ? "" : ply})`;
+  }
+  const score = evalInCurrentPosition.value.score ?? 0;
+  return `${senteWinRate.value}%(${score >= 0 ? "+" : ""}${score})`;
+});
+
+const goteDisplayText = computed(() => {
+  const mate = evalInCurrentPosition.value.mate;
+  if (mate !== undefined) {
+    const ply = Math.abs(mate);
+    return `(詰${ply >= 999999 ? "" : ply})${goteWinRate.value}%`;
+  }
+  const score = -(evalInCurrentPosition.value.score ?? 0);
+  return `(${score >= 0 ? "+" : ""}${score})${goteWinRate.value}%`;
+});
+
+const evaluationBarBackground = computed(() => {
+  // 先手勝率を境界に左右2色グラデーションでバーを描画する。
+  const s = `${senteWinRate.value}%`;
+  return `linear-gradient(to right, ${appSettings.mobileEvalBarSenteColor} 0 ${s}, ${appSettings.mobileEvalBarGoteColor} ${s} 100%)`;
+});
+
 const boardPaneMaxSize = computed(() => {
   const maxSize = new RectSize(windowSize.width, windowSize.height);
+  maxSize.height -= evaluationBarHeight.value;
   if (showRecordViewOnBottom.value) {
-    maxSize.height -= controlPaneHeight.value + minRecordViewHeight;
+    maxSize.height -= controlPaneHeight.value + selectorHeight + minRecordViewHeight;
   } else {
     maxSize.width -= minRecordViewWidth;
   }
@@ -159,16 +276,34 @@ const onBoardPaneResize = (size: RectSize) => {
   boardPaneSize.value = size;
 };
 
+watch(
+  () => store.appState,
+  (state) => {
+    if (state !== AppState.NORMAL) {
+      if (store.researchState === ResearchState.RUNNING) {
+        store.stopResearch();
+      }
+    }
+  },
+);
+
 const bottomViewSize = computed(() => {
   return new RectSize(
     windowSize.width,
-    windowSize.height - boardPaneSize.value.height - controlPaneHeight.value - selectorHeight,
+    Math.max(
+      0,
+      windowSize.height -
+        evaluationBarHeight.value -
+        boardPaneSize.value.height -
+        controlPaneHeight.value -
+        selectorHeight,
+    ),
   );
 });
 const sideViewSize = computed(() => {
   return new RectSize(
-    windowSize.width - boardPaneSize.value.width,
-    windowSize.height - controlPaneHeight.value - selectorHeight,
+    Math.max(0, windowSize.width - boardPaneSize.value.width),
+    Math.max(0, windowSize.height - controlPaneHeight.value - selectorHeight),
   );
 });
 
@@ -182,6 +317,56 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.mobile-layout-root,
+.layout-main-row {
+  overflow-x: hidden;
+}
+
+.no-horizontal-swipe {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+}
+
+.bottom-tab-selector {
+  display: block;
+  margin: 0 auto;
+}
+
+.evaluation-rate-bar {
+  display: flex;
+  align-items: center;
+}
+
+.evaluation-rate-bar .bar {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-top: 1px solid rgba(255, 255, 255, 0.35);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.evaluation-rate-bar .sente-text,
+.evaluation-rate-bar .gote-text {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--main-color);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+.evaluation-rate-bar .sente-text {
+  left: 8px;
+}
+
+.evaluation-rate-bar .gote-text {
+  right: 8px;
+}
+
 .controls button {
   font-size: 100%;
   width: 100%;

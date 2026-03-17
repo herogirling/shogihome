@@ -91,19 +91,17 @@
         <HorizontalSelector
           v-model:value="update.pieceImage"
           class="selector"
-          :items="
-            [
-              { label: t.singleKanjiPiece, value: PieceImageType.HITOMOJI },
-              { label: t.singleKanjiWoodPiece, value: PieceImageType.HITOMOJI_WOOD },
-              { label: t.singleKanjiGothicPiece, value: PieceImageType.HITOMOJI_GOTHIC },
-              { label: t.singleKanjiDarkPiece, value: PieceImageType.HITOMOJI_DARK },
-              {
-                label: t.singleKanjiGothicDarkPiece,
-                value: PieceImageType.HITOMOJI_GOTHIC_DARK,
-              },
-              { label: t.customImage, value: PieceImageType.CUSTOM_IMAGE },
-            ].filter((item) => !isMobileWebApp() || item.value !== PieceImageType.CUSTOM_IMAGE)
-          "
+          :items="[
+            { label: t.singleKanjiPiece, value: PieceImageType.HITOMOJI },
+            { label: t.singleKanjiWoodPiece, value: PieceImageType.HITOMOJI_WOOD },
+            { label: t.singleKanjiGothicPiece, value: PieceImageType.HITOMOJI_GOTHIC },
+            { label: t.singleKanjiDarkPiece, value: PieceImageType.HITOMOJI_DARK },
+            {
+              label: t.singleKanjiGothicDarkPiece,
+              value: PieceImageType.HITOMOJI_GOTHIC_DARK,
+            },
+            { label: t.customImage, value: PieceImageType.CUSTOM_IMAGE },
+          ]"
         />
         <div
           v-show="update.pieceImage === PieceImageType.CUSTOM_IMAGE"
@@ -131,25 +129,23 @@
         <HorizontalSelector
           v-model:value="update.boardImage"
           class="selector"
-          :items="
-            [
-              { label: t.lightWoodyTexture(1), value: BoardImageType.LIGHT },
-              { label: t.lightWoodyTexture(2), value: BoardImageType.LIGHT2 },
-              { label: t.lightWoodyTexture(3), value: BoardImageType.LIGHT3 },
-              { label: t.warmWoodTexture(1), value: BoardImageType.WARM },
-              { label: t.warmWoodTexture(2), value: BoardImageType.WARM2 },
-              { label: t.resin, value: BoardImageType.RESIN },
-              { label: t.resin + '2', value: BoardImageType.RESIN2 },
-              { label: t.resin + '3', value: BoardImageType.RESIN3 },
-              { label: t.green, value: BoardImageType.GREEN },
-              { label: t.cherryBlossom, value: BoardImageType.CHERRY_BLOSSOM },
-              { label: t.autumn, value: BoardImageType.AUTUMN },
-              { label: t.snow, value: BoardImageType.SNOW },
-              { label: t.darkGreen, value: BoardImageType.DARK_GREEN },
-              { label: t.dark, value: BoardImageType.DARK },
-              { label: t.customImage, value: BoardImageType.CUSTOM_IMAGE },
-            ].filter((item) => !isMobileWebApp() || item.value !== BoardImageType.CUSTOM_IMAGE)
-          "
+          :items="[
+            { label: t.lightWoodyTexture(1), value: BoardImageType.LIGHT },
+            { label: t.lightWoodyTexture(2), value: BoardImageType.LIGHT2 },
+            { label: t.lightWoodyTexture(3), value: BoardImageType.LIGHT3 },
+            { label: t.warmWoodTexture(1), value: BoardImageType.WARM },
+            { label: t.warmWoodTexture(2), value: BoardImageType.WARM2 },
+            { label: t.resin, value: BoardImageType.RESIN },
+            { label: t.resin + '2', value: BoardImageType.RESIN2 },
+            { label: t.resin + '3', value: BoardImageType.RESIN3 },
+            { label: t.green, value: BoardImageType.GREEN },
+            { label: t.cherryBlossom, value: BoardImageType.CHERRY_BLOSSOM },
+            { label: t.autumn, value: BoardImageType.AUTUMN },
+            { label: t.snow, value: BoardImageType.SNOW },
+            { label: t.darkGreen, value: BoardImageType.DARK_GREEN },
+            { label: t.dark, value: BoardImageType.DARK },
+            { label: t.customImage, value: BoardImageType.CUSTOM_IMAGE },
+          ]"
         />
       </div>
       <div v-show="update.boardImage === BoardImageType.CUSTOM_IMAGE" class="form-item">
@@ -163,18 +159,28 @@
       <!-- マス目 -->
       <div class="form-item">
         <div class="form-item-label-wide">マス目</div>
+        <ToggleButton v-model:value="update.showBoardGrid" label="表示する" />
         <ToggleButton
-          v-once
+          :disabled="!update.showBoardGrid"
           :value="!!update.boardGridColor"
           label="色を選択"
           @update:value="(value) => (update.boardGridColor = value ? 'black' : null)"
         />
         <input
-          v-show="update.boardGridColor"
+          v-show="update.showBoardGrid && update.boardGridColor"
           v-model="update.boardGridColor"
           class="color-selector"
           type="color"
         />
+      </div>
+      <!-- 評価値バー色 (モバイル) -->
+      <div class="form-item">
+        <div class="form-item-label-wide">評価値バー (先手)</div>
+        <input v-model="update.mobileEvalBarSenteColor" class="color-selector" type="color" />
+      </div>
+      <div class="form-item">
+        <div class="form-item-label-wide">評価値バー (後手)</div>
+        <input v-model="update.mobileEvalBarGoteColor" class="color-selector" type="color" />
       </div>
       <!-- 駒台画像 -->
       <div class="form-item">
@@ -182,19 +188,17 @@
         <HorizontalSelector
           v-model:value="update.pieceStandImage"
           class="selector"
-          :items="
-            [
-              { label: t.standard, value: PieceStandImageType.STANDARD },
-              { label: t.woodTexture, value: PieceStandImageType.DARK_WOOD },
-              { label: t.green, value: PieceStandImageType.GREEN },
-              { label: t.cherryBlossom, value: PieceStandImageType.CHERRY_BLOSSOM },
-              { label: t.autumn, value: PieceStandImageType.AUTUMN },
-              { label: t.snow, value: PieceStandImageType.SNOW },
-              { label: t.darkGreen, value: PieceStandImageType.DARK_GREEN },
-              { label: t.dark, value: PieceStandImageType.DARK },
-              { label: t.customImage, value: PieceStandImageType.CUSTOM_IMAGE },
-            ].filter((item) => !isMobileWebApp() || item.value !== PieceStandImageType.CUSTOM_IMAGE)
-          "
+          :items="[
+            { label: t.standard, value: PieceStandImageType.STANDARD },
+            { label: t.woodTexture, value: PieceStandImageType.DARK_WOOD },
+            { label: t.green, value: PieceStandImageType.GREEN },
+            { label: t.cherryBlossom, value: PieceStandImageType.CHERRY_BLOSSOM },
+            { label: t.autumn, value: PieceStandImageType.AUTUMN },
+            { label: t.snow, value: PieceStandImageType.SNOW },
+            { label: t.darkGreen, value: PieceStandImageType.DARK_GREEN },
+            { label: t.dark, value: PieceStandImageType.DARK },
+            { label: t.customImage, value: PieceStandImageType.CUSTOM_IMAGE },
+          ]"
         />
       </div>
       <div v-show="update.pieceStandImage === PieceStandImageType.CUSTOM_IMAGE" class="form-item">
@@ -563,11 +567,7 @@
       </div>
     </div>
     <!-- 評価値・期待勝率・読み筋 -->
-    <div
-      v-if="!isMobileWebApp()"
-      v-show="selectedTab === 'evaluation'"
-      class="form-group scroll settings"
-    >
+    <div v-show="selectedTab === 'evaluation'" class="form-group scroll settings">
       <!-- 評価値の符号 -->
       <div class="form-item">
         <div class="form-item-label-wide">
@@ -592,6 +592,11 @@
         </div>
         <input v-model.number="update.maxArrowsPerEngine" type="number" max="10" min="0" />
         <div class="form-item-small-label">({{ t.between(0, 10) }})</div>
+      </div>
+      <!-- 盤面上に読み筋を表示 -->
+      <div class="form-item">
+        <div class="form-item-label-wide">盤面上に読み筋を表示</div>
+        <ToggleButton v-model:value="update.showEnginePVOnBoard" />
       </div>
       <!-- 矢印の評価値範囲 -->
       <div class="form-item">
@@ -815,11 +820,11 @@ const tabItems = computed(() => [
   { label: t.sounds, value: "sounds" },
   { label: t.shortcutKeys, value: "shortcuts" },
   { label: t.record, value: "record" },
+  { label: t.evaluationAndEstimatedWinRateAndPV, value: "evaluation" },
   ...(!isMobileWebApp()
     ? [
         { label: t.book, value: "book" },
         { label: t.usiProtocol, value: "usi" },
-        { label: t.evaluationAndEstimatedWinRateAndPV, value: "evaluation" },
         { label: t.appVersion, value: "version" },
         { label: t.forDevelopers, value: "developer" },
       ]
@@ -839,7 +844,10 @@ const update = ref({
   deletePieceImageMargin: org.deletePieceImageMargin,
   boardImage: org.boardImage,
   boardImageFileURL: org.boardImageFileURL,
+  showBoardGrid: org.showBoardGrid,
   boardGridColor: org.boardGridColor,
+  mobileEvalBarSenteColor: org.mobileEvalBarSenteColor,
+  mobileEvalBarGoteColor: org.mobileEvalBarGoteColor,
   pieceStandImage: org.pieceStandImage,
   pieceStandImageFileURL: org.pieceStandImageFileURL,
   enableTransparent: org.enableTransparent,
@@ -873,6 +881,7 @@ const update = ref({
   nodeCountFormat: org.nodeCountFormat,
   evaluationViewFrom: org.evaluationViewFrom,
   maxArrowsPerEngine: org.maxArrowsPerEngine,
+  showEnginePVOnBoard: org.showEnginePVOnBoard,
   arrowScoreDiffRange: org.arrowScoreDiffRange,
   showArrowScore: org.showArrowScore,
   coefficientInSigmoid: org.coefficientInSigmoid,

@@ -81,8 +81,17 @@ class AppSettingsStore {
   get boardImageFileURL(): string | undefined {
     return this.merged.boardImageFileURL;
   }
+  get showBoardGrid(): boolean {
+    return this.merged.showBoardGrid;
+  }
   get boardGridColor(): string | null {
     return this.merged.boardGridColor;
+  }
+  get mobileEvalBarSenteColor(): string {
+    return this.merged.mobileEvalBarSenteColor;
+  }
+  get mobileEvalBarGoteColor(): string {
+    return this.merged.mobileEvalBarGoteColor;
   }
   get pieceStandImage(): PieceStandImageType {
     return this.merged.pieceStandImage;
@@ -211,6 +220,9 @@ class AppSettingsStore {
   }
   get maxArrowsPerEngine(): number {
     return this.merged.maxArrowsPerEngine;
+  }
+  get showEnginePVOnBoard(): boolean {
+    return this.merged.showEnginePVOnBoard;
   }
   get arrowScoreDiffRange(): number {
     return this.merged.arrowScoreDiffRange;

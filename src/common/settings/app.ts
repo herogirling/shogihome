@@ -172,7 +172,10 @@ export type AppSettings = {
   deletePieceImageMargin: boolean;
   boardImage: BoardImageType;
   boardImageFileURL?: string;
+  showBoardGrid: boolean;
   boardGridColor: string | null;
+  mobileEvalBarSenteColor: string;
+  mobileEvalBarGoteColor: string;
   pieceStandImage: PieceStandImageType;
   promotionSelectorStyle: PromotionSelectorStyle;
   pieceStandImageFileURL?: string;
@@ -231,6 +234,7 @@ export type AppSettings = {
   // Evaluation
   evaluationViewFrom: EvaluationViewFrom;
   maxArrowsPerEngine: number;
+  showEnginePVOnBoard: boolean;
   arrowScoreDiffRange: number;
   showArrowScore: boolean;
   coefficientInSigmoid: number;
@@ -342,7 +346,10 @@ export function defaultAppSettings(opt?: {
     kingPieceType: KingPieceType.GYOKU_AND_OSHO,
     deletePieceImageMargin: false,
     boardImage: BoardImageType.LIGHT2,
+    showBoardGrid: true,
     boardGridColor: null,
+    mobileEvalBarSenteColor: "#E22400",
+    mobileEvalBarGoteColor: "#0061FE",
     pieceStandImage: PieceStandImageType.DARK_WOOD,
     promotionSelectorStyle: PromotionSelectorStyle.HORIZONTAL,
     enableTransparent: false,
@@ -384,6 +391,7 @@ export function defaultAppSettings(opt?: {
     showEngineOptionDetails: false,
     evaluationViewFrom: EvaluationViewFrom.EACH,
     maxArrowsPerEngine: 3,
+    showEnginePVOnBoard: true,
     arrowScoreDiffRange: 100,
     showArrowScore: true,
     coefficientInSigmoid: 600,
@@ -545,6 +553,10 @@ export function getPieceImageURLTemplate(settings: AppSettings): string {
       return "./piece/hitomoji_gothic_dark/${piece}.png";
     case PieceImageType.CUSTOM_IMAGE:
       if (settings.croppedPieceImageBaseURL) {
+        // Web版のクロップ結果は piece-map:// 形式で保存される。
+        if (settings.croppedPieceImageBaseURL.startsWith("piece-map://")) {
+          return settings.croppedPieceImageBaseURL;
+        }
         const query = settings.croppedPieceImageQuery ? `?${settings.croppedPieceImageQuery}` : "";
         return (
           fileURLToCustomSchemeURL(settings.croppedPieceImageBaseURL) + "/${piece}.png" + query
