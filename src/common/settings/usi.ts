@@ -663,6 +663,7 @@ export async function decompressUSIEngineOptionsClipboardData(
 
 export type USIEngineMetadata = {
   isShellScript: boolean;
+  isRemote?: boolean;
 };
 
 export type USIEngineLaunchOptions = {
