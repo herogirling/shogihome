@@ -26,8 +26,8 @@
         />
         <RecordPane
           v-if="showRecordViewOnBottom"
-          class="no-horizontal-swipe"
           v-show="bottomUIType === BottomUIType.RECORD"
+          class="no-horizontal-swipe"
           :style="{
             width: `${windowSize.width}px`,
             height: `${bottomViewSize.height}px`,
@@ -39,8 +39,8 @@
         />
         <RecordComment
           v-if="showRecordViewOnBottom"
-          class="no-horizontal-swipe"
           v-show="bottomUIType === BottomUIType.COMMENT"
+          class="no-horizontal-swipe"
           :style="{
             width: `${windowSize.width}px`,
             height: `${bottomViewSize.height}px`,
@@ -48,8 +48,8 @@
         />
         <MobileResearchTable
           v-if="showRecordViewOnBottom"
-          class="no-horizontal-swipe"
           v-show="bottomUIType === BottomUIType.RESEARCH"
+          class="no-horizontal-swipe"
           :style="{
             width: `${windowSize.width}px`,
             height: `${bottomViewSize.height}px`,
@@ -60,8 +60,8 @@
         />
         <EvaluationChart
           v-if="showRecordViewOnBottom"
-          class="no-horizontal-swipe"
           v-show="bottomUIType === BottomUIType.CHART"
+          class="no-horizontal-swipe"
           :style="{
             width: `${windowSize.width}px`,
             height: `${bottomViewSize.height}px`,
@@ -74,8 +74,8 @@
         />
         <HorizontalSelector
           v-if="showRecordViewOnBottom"
-          class="no-horizontal-swipe bottom-tab-selector"
           v-model:value="bottomUIType"
+          class="no-horizontal-swipe bottom-tab-selector"
           :items="[
             { label: t.record, value: BottomUIType.RECORD },
             { label: t.comments, value: BottomUIType.COMMENT },
@@ -92,8 +92,8 @@
       >
         <MobileControls class="no-horizontal-swipe" :style="{ height: `${controlPaneHeight}px` }" />
         <RecordPane
-          class="no-horizontal-swipe"
           v-show="sideUIType === SideUIType.RECORD"
+          class="no-horizontal-swipe"
           :style="{ height: `${sideViewSize.height * 0.6}px` }"
           :show-top-control="false"
           :show-bottom-control="false"
@@ -101,16 +101,16 @@
           :show-comment="true"
         />
         <RecordComment
-          class="no-horizontal-swipe"
           v-show="sideUIType === SideUIType.RECORD"
+          class="no-horizontal-swipe"
           :style="{
             'margin-top': '5px',
             height: `${sideViewSize.height * 0.4 - 5}px`,
           }"
         />
         <MobileResearchTable
-          class="no-horizontal-swipe"
           v-show="sideUIType === SideUIType.RESEARCH"
+          class="no-horizontal-swipe"
           :style="{
             width: `${sideViewSize.width}px`,
             height: `${sideViewSize.height}px`,
@@ -120,8 +120,8 @@
           :active="sideUIType === SideUIType.RESEARCH"
         />
         <HorizontalSelector
-          class="no-horizontal-swipe"
           v-model:value="sideUIType"
+          class="no-horizontal-swipe"
           :items="[
             { label: t.record, value: SideUIType.RECORD },
             { label: t.research, value: SideUIType.RESEARCH },
@@ -148,8 +148,7 @@ enum SideUIType {
 
 <script setup lang="ts">
 import { RectSize } from "@/common/assets/geometry";
-import { BoardLayoutType } from "@/common/settings/layout";
-import { EvaluationChartType } from "@/common/settings/layout";
+import { BoardLayoutType, EvaluationChartType } from "@/common/settings/layout";
 import { Lazy } from "@/common/helpers/lazy";
 import BoardPane from "@/renderer/view/main/BoardPane.vue";
 import RecordPane from "@/renderer/view/main/RecordPane.vue";
@@ -191,11 +190,12 @@ const updateSize = () => {
 };
 
 const showRecordViewOnBottom = computed(() => windowSize.height >= windowSize.width);
+// 評価値バーは操作ボタンより薄めにし、盤面の表示領域を優先する。
 const evaluationBarHeight = computed(() => controlPaneHeight.value * (2 / 3));
-const controlPaneBaseHeight = computed(() => Math.min(windowSize.height * 0.08, windowSize.width * 0.12));
-const controlPaneHeight = computed(() =>
-  Math.max(36, controlPaneBaseHeight.value * 0.64),
+const controlPaneBaseHeight = computed(() =>
+  Math.min(windowSize.height * 0.08, windowSize.width * 0.12),
 );
+const controlPaneHeight = computed(() => Math.max(36, controlPaneBaseHeight.value * 0.64));
 
 // 現局面で利用可能な評価値を優先順で取り出す。
 const evalInCurrentPosition = computed(() => {
@@ -245,11 +245,12 @@ const goteDisplayText = computed(() => {
 
 const evaluationBarBackground = computed(() => {
   // 先手勝率を境界に左右2色グラデーションでバーを描画する。
-  const s = `${senteWinRate.value}%`;
-  return `linear-gradient(to right, ${appSettings.mobileEvalBarSenteColor} 0 ${s}, ${appSettings.mobileEvalBarGoteColor} ${s} 100%)`;
+  const senteRatePercent = `${senteWinRate.value}%`;
+  return `linear-gradient(to right, ${appSettings.mobileEvalBarSenteColor} 0 ${senteRatePercent}, ${appSettings.mobileEvalBarGoteColor} ${senteRatePercent} 100%)`;
 });
 
 const boardPaneMaxSize = computed(() => {
+  // 盤面サイズ算出時は固定UI（評価値バー/操作/タブ）の占有分を先に差し引く。
   const maxSize = new RectSize(windowSize.width, windowSize.height);
   maxSize.height -= evaluationBarHeight.value;
   if (showRecordViewOnBottom.value) {
@@ -260,6 +261,7 @@ const boardPaneMaxSize = computed(() => {
   return maxSize;
 });
 const boardLayoutType = computed(() => {
+  // 縦横比に応じて、駒表示の詰まりにくいレイアウトを選ぶ。
   if (showRecordViewOnBottom.value) {
     return windowSize.width < windowSize.height * 0.57
       ? BoardLayoutType.PORTRAIT
@@ -279,6 +281,7 @@ const onBoardPaneResize = (size: RectSize) => {
 watch(
   () => store.appState,
   (state) => {
+    // モーダル表示中に検討を継続すると操作競合しやすいため、通常画面以外では停止する。
     if (state !== AppState.NORMAL) {
       if (store.researchState === ResearchState.RUNNING) {
         store.stopResearch();

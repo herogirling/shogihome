@@ -97,6 +97,7 @@ const splitCandidateAndPV = (text: string): { candidate: string; pv: string } =>
 };
 
 const rows = computed<Row[]>(() => {
+  // 検討対象のセッションだけを抽出し、現局面と一致するinfoのみ表示する。
   const monitor = store.usiMonitors.find((m) => store.isResearchEngineSessionID(m.sessionID));
   const infos = (monitor?.latestInfo || []).filter((info) => {
     return info.position === store.record.position.sfen;
@@ -118,6 +119,7 @@ const rows = computed<Row[]>(() => {
     }
 
     const rank = info.multiPV || index + 1;
+    // UI表現は 1位=最善手 / 2位=次善手 / 3位以降=数字 として可読性を優先する。
     const rankText = rank === 1 ? "最善手" : rank === 2 ? "次善手" : `${rank}`;
 
     return {
@@ -151,6 +153,7 @@ watch(
 );
 
 onMounted(() => {
+  // ノード数/経過秒の表示更新用に100ms周期で現在時刻を進める。
   timerId = setInterval(() => {
     nowMs.value = Date.now();
   }, 100);
@@ -163,14 +166,15 @@ onBeforeUnmount(() => {
 });
 
 const researchSummary = computed(() => {
-  nowMs.value;
+  // nowMs を依存に含めて、最新 info が止まった後も経過秒表示を進める。
+  const currentNowMs = nowMs.value;
   const monitor = store.usiMonitors.find((m) => store.isResearchEngineSessionID(m.sessionID));
   const infos = (monitor?.latestInfo || []).filter((info) => {
     return info.position === store.record.position.sfen;
   });
   const best = infos.find((info) => (info.multiPV || 1) === 1) || infos[0];
   const baseTimeMs = best ? Math.max(0, best.timeMs || 0) : latestBestTimeMs.value;
-  const elapsedMs = best ? Math.max(0, nowMs.value - latestBestUpdatedAtMs.value) : 0;
+  const elapsedMs = best ? Math.max(0, currentNowMs - latestBestUpdatedAtMs.value) : 0;
   const timeMs = baseTimeMs + elapsedMs;
   const totalSeconds = Math.floor(timeMs / 1000);
   const seconds = totalSeconds % 60;
@@ -190,6 +194,7 @@ const onTapRow = (row: Row): void => {
     return;
   }
 
+  // 既存の反復表示を一旦閉じてから、選択手で新局面へ進める。
   for (const monitor of store.usiMonitors) {
     if (store.isResearchEngineSessionID(monitor.sessionID)) {
       store.endUSIIteration(monitor.sessionID);
@@ -203,7 +208,7 @@ const onTapRow = (row: Row): void => {
 
   store.doMove(move);
 
-  // Ensure engines restart searching from the moved position after tap.
+  // タップで指し手を進めた後、現在局面から再検討を開始する。
   store.ensureResearchAtCurrentPosition({ notifyOnError: true });
 };
 

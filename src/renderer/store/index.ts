@@ -41,8 +41,11 @@ import { calculateGameStatistics, GameResults, SPRTSummary } from "@/renderer/ga
 import { CSAGameManager, CSAGameState } from "@/renderer/game/csa.js";
 import { Clock } from "@/renderer/game/clock.js";
 import { generateRecordFileName, join } from "@/renderer/helpers/path.js";
-import { ResearchSettings } from "@/common/settings/research.js";
-import { normalizeResearchSettings, validateResearchSettings } from "@/common/settings/research.js";
+import {
+  ResearchSettings,
+  normalizeResearchSettings,
+  validateResearchSettings,
+} from "@/common/settings/research.js";
 import { USIPlayerMonitor, USIMonitor } from "./usi.js";
 import { AppState, ResearchState } from "@/common/control/state.js";
 import { useMessageStore } from "./message.js";
@@ -933,13 +936,11 @@ class Store {
   }
 
   startResearch(researchSettings: ResearchSettings): void {
-    if (
-      (this._researchState !== ResearchState.STARTUP_DIALOG &&
-        this._researchState !== ResearchState.IDLE) ||
-      useBusyState().isBusy
-    ) {
+    // 明示的に検討ダイアログを開いた場合のみ開始を許可し、誤起動を防ぐ。
+    if (this._researchState !== ResearchState.STARTUP_DIALOG || useBusyState().isBusy) {
       return;
     }
+    // 起動完了まで操作を抑止するため、最初にbusyを確保する。
     useBusyState().retain();
     if (!researchSettings.usi) {
       useErrorStore().add(new Error("エンジンが設定されていません。"));
@@ -950,6 +951,7 @@ class Store {
       .saveResearchSettings(researchSettings)
       .then(() => this.researchManager.launch(researchSettings))
       .then(() => {
+        // 起動成功後にRUNNINGへ遷移し、現在局面で探索を開始する。
         this._researchState = ResearchState.RUNNING;
         this.updateResearchPosition();
         const appSettings = useAppSettings();
@@ -960,6 +962,7 @@ class Store {
           appSettings.tab !== Tab.PERCENTAGE_CHART &&
           appSettings.tab !== Tab.MONITOR
         ) {
+          // 検討開始時はPVタブを優先表示して、結果が見える状態にそろえる。
           useAppSettings().updateAppSettings({ tab: Tab.PV });
         }
       })

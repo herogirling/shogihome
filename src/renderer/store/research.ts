@@ -130,18 +130,11 @@ export class ResearchManager {
         if (engine.paused) {
           return;
         }
-        // 旧局面の探索が残っていると info が混線するエンジンがあるため、
-        // 局面更新時は stop 後に新局面で再投入する。
-        engine.usi
-          .stop()
-          .catch(() => {
-            // stop failure is non-fatal; startResearch below will re-issue position/go.
-          })
-          .finally(() => {
-            engine.usi.startResearch(record.position, record.usi).catch((e) => {
-              this.onError(e);
-            });
-          });
+        // stop を毎回挟むと既存仕様（無制限検討時の stop 非送信）を崩すため、
+        // ここでは startResearch のみ再投入して従来挙動を維持する。
+        engine.usi.startResearch(record.position, record.usi).catch((e) => {
+          this.onError(e);
+        });
         // タイマーを初期化する。
         this.setupTimer(engine);
       });
