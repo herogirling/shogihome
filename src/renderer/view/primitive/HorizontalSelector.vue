@@ -10,7 +10,11 @@
           @click="emit('tap', item.value)"
           @change="emit('update:value', item.value)"
         />
-        <div class="button" :class="{ highlighted: highlightedValues.includes(item.value) }" :style="buttonStyle">
+        <div
+          class="button"
+          :class="{ highlighted: highlightedValues.includes(item.value) }"
+          :style="buttonStyle"
+        >
           <div class="label">{{ item.label }}</div>
         </div>
       </div>
@@ -69,6 +73,7 @@ const buttonStyle = computed(() => {
 });
 
 const setValue = (value: string) => {
+  // v-model 更新前にDOMのchecked状態も同期し、外部からの値変更でも表示ズレを防ぐ。
   for (const input of container.value.querySelectorAll("input")) {
     if (input.value === value) {
       input.checked = true;
@@ -78,6 +83,7 @@ const setValue = (value: string) => {
   }
 };
 const getValue = () => {
+  // checkedが見つからないケース（初期描画直後など）はprops値をフォールバックで返す。
   const checked = Array.from(container.value.querySelectorAll("input")).find((input) => {
     if (input.checked) {
       return input.value;

@@ -5,7 +5,7 @@
         <div class="title menu-title">Menu</div>
 
         <!-- モバイルWebでは対局/検討関連の操作を最上段にまとめる。 -->
-        <div class="leaf-group" v-if="isMobileWebApp()">
+        <div v-if="isMobileWebApp()" class="leaf-group">
           <div class="leaf-group-title">対局・検討</div>
           <button class="tree-action" @click="onFlip">
             <Icon :icon="IconType.FLIP" />
@@ -65,37 +65,71 @@
               <span>棋譜をファイルに保存</span>
             </summary>
             <div class="tree-children">
-              <button v-if="isNative()" class="tree-action" :disabled="!states.saveAs" @click="onSaveAs">
+              <button
+                v-if="isNative()"
+                class="tree-action"
+                :disabled="!states.saveAs"
+                @click="onSaveAs"
+              >
                 <Icon :icon="IconType.SAVE_AS" />
                 <span>保存形式を選択</span>
               </button>
-              <button class="tree-action" :disabled="!states.saveAs" @click="onSaveByFormat(RecordFileFormat.KIF)">
+              <button
+                class="tree-action"
+                :disabled="!states.saveAs"
+                @click="onSaveByFormat(RecordFileFormat.KIF)"
+              >
                 <Icon :icon="IconType.SAVE" />
                 <span>.kif形式</span>
               </button>
-              <button class="tree-action" :disabled="!states.saveAs" @click="onSaveByFormat(RecordFileFormat.KIFU)">
+              <button
+                class="tree-action"
+                :disabled="!states.saveAs"
+                @click="onSaveByFormat(RecordFileFormat.KIFU)"
+              >
                 <Icon :icon="IconType.SAVE" />
                 <span>.kifu形式</span>
               </button>
-              <button class="tree-action" :disabled="!states.saveAs" @click="onSaveByFormat(RecordFileFormat.KI2)">
+              <button
+                class="tree-action"
+                :disabled="!states.saveAs"
+                @click="onSaveByFormat(RecordFileFormat.KI2)"
+              >
                 <Icon :icon="IconType.SAVE" />
                 <span>.ki2形式</span>
               </button>
-              <button class="tree-action" :disabled="!states.saveAs" @click="onSaveByFormat(RecordFileFormat.KI2U)">
+              <button
+                class="tree-action"
+                :disabled="!states.saveAs"
+                @click="onSaveByFormat(RecordFileFormat.KI2U)"
+              >
                 <Icon :icon="IconType.SAVE" />
                 <span>.ki2u形式</span>
               </button>
-              <button class="tree-action" :disabled="!states.saveAs" @click="onSaveByFormat(RecordFileFormat.CSA)">
+              <button
+                class="tree-action"
+                :disabled="!states.saveAs"
+                @click="onSaveByFormat(RecordFileFormat.CSA)"
+              >
                 <Icon :icon="IconType.SAVE" />
                 <span>.csa形式</span>
               </button>
-              <button class="tree-action" :disabled="!states.saveAs" @click="onSaveByFormat(RecordFileFormat.JKF)">
+              <button
+                class="tree-action"
+                :disabled="!states.saveAs"
+                @click="onSaveByFormat(RecordFileFormat.JKF)"
+              >
                 <Icon :icon="IconType.SAVE" />
                 <span>.jkf形式</span>
               </button>
             </div>
           </details>
-          <button v-if="isNative()" class="tree-action" :disabled="!states.history" @click="onHistory">
+          <button
+            v-if="isNative()"
+            class="tree-action"
+            :disabled="!states.history"
+            @click="onHistory"
+          >
             <Icon :icon="IconType.HISTORY" />
             <span>{{ t.history }}</span>
           </button>
@@ -201,7 +235,6 @@
       </div>
     </dialog>
     <InitialPositionMenu v-if="isInitialPositionMenuVisible" @close="emit('close')" />
-    <MobileRecordInfoMenu v-if="isRecordInfoMenuVisible" @close="isRecordInfoMenuVisible = false" />
   </div>
 </template>
 
@@ -219,7 +252,6 @@ import { installHotKeyForDialog, uninstallHotKeyForDialog } from "@/renderer/dev
 import { openCopyright } from "@/renderer/helpers/copyright";
 import { RecordFileFormat } from "@/common/file/record";
 import InitialPositionMenu from "@/renderer/view/menu/InitialPositionMenu.vue";
-import MobileRecordInfoMenu from "@/renderer/view/menu/MobileRecordInfoMenu.vue";
 
 const emit = defineEmits<{
   close: [];
@@ -228,7 +260,6 @@ const emit = defineEmits<{
 const store = useStore();
 const dialog = ref();
 const isInitialPositionMenuVisible = ref(false);
-const isRecordInfoMenuVisible = ref(false);
 const onClose = () => {
   emit("close");
 };
@@ -361,7 +392,9 @@ const onAppSettings = () => {
   emit("close");
 };
 const onShowRecordInfo = () => {
-  isRecordInfoMenuVisible.value = true;
+  // このブランチでは専用モバイルメニューを追加しないため、既存導線を維持してメニューを閉じる。
+  // 別PRで専用画面を導入する場合は、ここを分岐起点として差し替える。
+  emit("close");
 };
 const states = computed(() => {
   return {

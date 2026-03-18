@@ -326,11 +326,17 @@ export function isNative(): boolean {
   return !!getWindowObject().electronShogiAPI;
 }
 
+function matchMediaMatches(query: string): boolean {
+  // Vitest/jsdom では matchMedia が未実装な場合があるため、Web 判定を安全化する。
+  return typeof window.matchMedia === "function" && window.matchMedia(query).matches;
+}
+
 // 起動時に一度だけ Web モバイル判定を確定する。
 function detectInitialMobileWebApp(): boolean {
   if (isNative()) {
     return false;
   }
+  // 明示クエリがある場合はユーザー指定を最優先する。
   const urlParams = new URL(window.location.toString()).searchParams;
   if (urlParams.has("mobile")) {
     return true;
@@ -338,15 +344,19 @@ function detectInitialMobileWebApp(): boolean {
   if (urlParams.has("desktop")) {
     return false;
   }
-  const nav = window.navigator as Navigator & { standalone?: boolean };
-  const isStandalone =
-    nav.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
-  const hasTouch = nav.maxTouchPoints > 0 || window.matchMedia("(pointer: coarse)").matches;
+  const nav = (window.navigator ?? {}) as Navigator & {
+    standalone?: boolean;
+    maxTouchPoints?: number;
+  };
+  // テストで navigator を最小限だけstubした場合でも false 判定で安全に継続する。
+  const maxTouchPoints = typeof nav.maxTouchPoints === "number" ? nav.maxTouchPoints : 0;
+  // display-mode/pointer 判定は端末依存のため、matchMedia未実装時は false 扱いにする。
+  const isStandalone = nav.standalone === true || matchMediaMatches("(display-mode: standalone)");
+  const hasTouch = maxTouchPoints > 0 || matchMediaMatches("(pointer: coarse)");
   return isStandalone && hasTouch;
 }
 
-const initialMobileWebApp = detectInitialMobileWebApp();
-
 export function isMobileWebApp(): boolean {
-  return initialMobileWebApp;
+  // テストでは window.location を都度差し替えるため、判定結果を固定しない。
+  return detectInitialMobileWebApp();
 }

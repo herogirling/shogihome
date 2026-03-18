@@ -8,38 +8,35 @@
         </button>
       </div>
       <div class="group">
-        <button v-if="!playerURI" @click="selectPlayer(uri.ES_BASIC_ENGINE_STATIC_ROOK_V1)">
-          <Icon :icon="IconType.ROBOT" />
-          <div class="label">{{ `${t.beginner} (${t.staticRook})` }}</div>
-        </button>
-        <button v-if="!playerURI" @click="selectPlayer(uri.ES_BASIC_ENGINE_RANGING_ROOK_V1)">
-          <Icon :icon="IconType.ROBOT" />
-          <div class="label">{{ `${t.beginner} (${t.rangingRook})` }}</div>
-        </button>
-        <button
-          v-for="engine of gameEngines"
-          v-if="!playerURI"
-          :key="engine.uri"
-          @click="selectPlayer(engine.uri)"
-        >
-          <Icon :icon="IconType.ROBOT" />
-          <div class="label">{{ engine.name }}</div>
-        </button>
-        <button v-if="playerURI" @click="selectTurn(Color.BLACK)">
-          <Icon :icon="IconType.GAME" />
-          <div class="label">{{ t.sente }}</div>
-        </button>
-        <button v-if="playerURI" @click="selectTurn(Color.WHITE)">
-          <Icon :icon="IconType.GAME" />
-          <div class="label">{{ t.gote }}</div>
-        </button>
-        <button
-          v-if="playerURI"
-          @click="selectTurn(Math.random() * 2 >= 1 ? Color.BLACK : Color.WHITE)"
-        >
-          <Icon :icon="IconType.GAME" />
-          <div class="label">{{ t.pieceToss }}</div>
-        </button>
+        <template v-if="!playerURI">
+          <button @click="selectPlayer(uri.ES_BASIC_ENGINE_STATIC_ROOK_V1)">
+            <Icon :icon="IconType.ROBOT" />
+            <div class="label">{{ `${t.beginner} (${t.staticRook})` }}</div>
+          </button>
+          <button @click="selectPlayer(uri.ES_BASIC_ENGINE_RANGING_ROOK_V1)">
+            <Icon :icon="IconType.ROBOT" />
+            <div class="label">{{ `${t.beginner} (${t.rangingRook})` }}</div>
+          </button>
+          <!-- playerURI が空の間だけ候補エンジン一覧を表示する。 -->
+          <button v-for="engine of gameEngines" :key="engine.uri" @click="selectPlayer(engine.uri)">
+            <Icon :icon="IconType.ROBOT" />
+            <div class="label">{{ engine.name }}</div>
+          </button>
+        </template>
+        <template v-else>
+          <button @click="selectTurn(Color.BLACK)">
+            <Icon :icon="IconType.GAME" />
+            <div class="label">{{ t.sente }}</div>
+          </button>
+          <button @click="selectTurn(Color.WHITE)">
+            <Icon :icon="IconType.GAME" />
+            <div class="label">{{ t.gote }}</div>
+          </button>
+          <button @click="selectTurn(Math.random() * 2 >= 1 ? Color.BLACK : Color.WHITE)">
+            <Icon :icon="IconType.GAME" />
+            <div class="label">{{ t.pieceToss }}</div>
+          </button>
+        </template>
       </div>
     </dialog>
   </div>
@@ -88,6 +85,7 @@ onBeforeUnmount(() => {
   uninstallHotKeyForDialog(dialog.value);
 });
 const selectPlayer = (uri: string) => {
+  // 先に相手側プレイヤーを確定し、次の画面で先後選択へ進む。
   playerURI.value = uri;
 };
 
@@ -119,6 +117,7 @@ const buildPlayerSettings = (playerURI: string): PlayerSettings => {
 };
 
 const selectTurn = (turn: Color) => {
+  // playerURI には先に選んだ相手を保持しており、選択した先後に合わせて入れ替える。
   let black = buildPlayerSettings(uri.ES_HUMAN);
   let white = buildPlayerSettings(playerURI.value);
   if (turn === Color.WHITE) {
