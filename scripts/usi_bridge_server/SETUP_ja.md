@@ -11,7 +11,6 @@
 
 ## 2. サーバーを起動する
 
-
 サーバーにしたいPCから`scripts/usi_engine_bridge_server.py`を実行します。
 
 ```bash
@@ -19,6 +18,7 @@ python scripts/usi_engine_bridge_server.py --engine "scripts/usi-engine.exe"
 ```
 
 引数:
+
 - `--engine`: USIエンジン実行ファイルのパス（必須）
 - `--host`: 待受アドレス（既定: `0.0.0.0`）
 - `--port`: 待受ポート（既定: `22391`）
@@ -51,4 +51,3 @@ python scripts/usi_engine_bridge_server.py --engine "scripts/usi-engine.exe"
 1. サーバーが起動中か確認する
 1. 入力したアドレスとポートが合っているか確認する（`22391`）
 1. ファイアウォールとルーターでそのポートが許可されているか確認する
-

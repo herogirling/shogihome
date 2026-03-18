@@ -100,7 +100,12 @@ function loadImageElement(src: string): Promise<HTMLImageElement> {
 function cropSpriteToPieceMap(src: HTMLImageElement, deleteMargin: boolean): string {
   const cellWidth = src.width / 8;
   const cellHeight = src.height / 4;
-  if (!Number.isFinite(cellWidth) || !Number.isFinite(cellHeight) || cellWidth <= 0 || cellHeight <= 0) {
+  if (
+    !Number.isFinite(cellWidth) ||
+    !Number.isFinite(cellHeight) ||
+    cellWidth <= 0 ||
+    cellHeight <= 0
+  ) {
     throw new Error("cannot get image metadata");
   }
   const pieceMap: Record<string, string> = {};
@@ -403,7 +408,11 @@ export const webAPI: Bridge = {
   async getUSIEngineMetadata(path: string): Promise<string> {
     return await getUSIEngineMetadataOnWeb(path);
   },
-  async sendUSIOptionButtonSignal(path: string, name: string, timeoutSeconds: number): Promise<void> {
+  async sendUSIOptionButtonSignal(
+    path: string,
+    name: string,
+    timeoutSeconds: number,
+  ): Promise<void> {
     await sendUSIOptionButtonSignalOnWeb(path, name, timeoutSeconds);
   },
   async usiLaunch(json: string, options: string): Promise<number> {
@@ -557,12 +566,14 @@ export const webAPI: Bridge = {
     // Do Nothing
   },
   log(level: LogLevel, message: string): void {
+    // Web版ではローカルファイル出力がないため、ブラウザコンソールへレベル別に出力する。
     switch (level) {
       case LogLevel.DEBUG:
         console.debug(message);
         break;
       case LogLevel.INFO:
-        console.log(message);
+        // レビュー時にデバッグ混入と誤認されにくいよう、INFO レベルは console.info を使う。
+        console.info(message);
         break;
       case LogLevel.WARN:
         console.warn(message);
@@ -584,6 +595,7 @@ export const webAPI: Bridge = {
     // DO NOTHING
   },
   openWebBrowser(url: string) {
+    // Web版は OS 依存APIを使えないため、新規タブで開く。
     window.open(url, "_blank");
   },
   async getMachineSpec(): Promise<string> {

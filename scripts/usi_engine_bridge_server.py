@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""USI Engine Bridge Server.
+"""USIエンジンブリッジサーバー。
 
-This server wraps a local USI engine executable and exposes HTTP endpoints
-for Web clients. It forwards USI protocol messages unchanged to the engine.
+このサーバーはローカルのUSIエンジン実行ファイルをラップし、
+Webクライアント向けにHTTPエンドポイントを公開します。
+USIプロトコルのメッセージはエンジンへそのまま中継します。
 
-Run example:
+実行例:
     python3 scripts/usi_engine_bridge_server.py --engine "C:/engines/usi-engine.exe" --host 0.0.0.0 --port 22391
 """
 
@@ -41,6 +42,7 @@ def parse_score_mate(arg: str) -> int:
 
 
 def parse_info_command(args: str) -> dict[str, Any]:
+    # USI info 行をShogiHome互換のJSON形式へ変換する。
     result: dict[str, Any] = {}
     s = args.split(" ")
     i = 0
@@ -94,6 +96,7 @@ def parse_info_command(args: str) -> dict[str, Any]:
 
 
 def parse_option_command(command: str, current_options: dict[str, Any]) -> None:
+    # option 行からUI表示用のオプション定義を抽出する。
     args = command.split(" ")
     if len(args) < 4 or args[0] != "name" or args[2] != "type":
         return
@@ -121,6 +124,7 @@ def parse_option_command(command: str, current_options: dict[str, Any]) -> None:
 
 
 def build_time_options(time_state: dict[str, int] | None) -> str:
+    # go コマンドに渡す時間指定を、byoyomi/incrementの有無で組み立てる。
     if not time_state:
         return "infinite"
     base = f"btime {time_state['btime']} wtime {time_state['wtime']}"
@@ -134,6 +138,7 @@ def opposite_color(color: str) -> str:
 
 
 def get_next_color_from_usi(usi: str) -> str:
+    # 現局面の手番を USI 文字列から推定する。
     if not usi.startswith("position "):
         return "black"
 
@@ -152,7 +157,7 @@ def get_next_color_from_usi(usi: str) -> str:
             sfen_part = rest
             moves = []
         sfen_tokens = sfen_part.split(" ")
-        # SFEN: <board> <side-to-move> <hand> <move-number>
+        # SFEN: <盤面> <手番> <持ち駒> <手数>
         side_token = sfen_tokens[1] if len(sfen_tokens) >= 2 else "b"
         base_color = "black" if side_token == "b" else "white"
         return base_color if len(moves) % 2 == 0 else opposite_color(base_color)
@@ -161,10 +166,12 @@ def get_next_color_from_usi(usi: str) -> str:
 
 
 def normalize_time_state_for_usi(usi: str, time_states: dict[str, Any] | None) -> dict[str, int] | None:
+    # Web側の timeStates は複数形式で渡されるため、ここでUSI go向けに統一する。
     if not time_states:
         return None
 
-    # Already normalized format.
+    # 入力がすでに USI go 向け形式（btime/wtime/byoyomi/binc/winc）の場合は、
+    # 型だけそろえてそのまま返す。
     if "btime" in time_states and "wtime" in time_states:
         return {
             "btime": int(time_states.get("btime", 0)),
@@ -180,7 +187,7 @@ def normalize_time_state_for_usi(usi: str, time_states: dict[str, Any] | None) -
     current = time_states.get(color) or {}
     byoyomi_sec = int(current.get("byoyomi", 0))
 
-    # Match ShogiHome background conversion logic.
+    # ShogiHome 側の変換ロジックと同じ挙動に合わせる。
     btime = int(black.get("timeMs", 0) - black.get("increment", 0) * 1000)
     wtime = int(white.get("timeMs", 0) - white.get("increment", 0) * 1000)
     return {
@@ -243,6 +250,7 @@ class EngineBridge:
         )
 
     def _watchdog_loop(self) -> None:
+        # heartbeat が一定時間止まったセッションを自動終了してリークを防ぐ。
         while True:
             time.sleep(WATCHDOG_INTERVAL_SEC)
             now_ms = self._now_ms()
@@ -279,6 +287,7 @@ class EngineBridge:
             self._subscribers.discard(q)
 
     def _new_process(self) -> subprocess.Popen[str]:
+        # OSと実行ファイル拡張子に応じて起動経路を分岐する。
         path = Path(self.engine_path).expanduser().resolve()
         if not path.exists():
             raise FileNotFoundError(f"engine not found: {path}")
@@ -300,7 +309,7 @@ class EngineBridge:
         if not sys.platform.startswith("win") and cmd.lower().endswith(".exe"):
             is_wsl = "microsoft" in platform.release().lower() or bool(os.environ.get("WSL_INTEROP"))
             if is_wsl:
-                # WSL interop can execute Windows .exe without wine.
+                # WSL 連携では wine を介さずに Windows .exe を直接実行できる。
                 try:
                     return subprocess.Popen(
                         [cmd],
@@ -312,14 +321,14 @@ class EngineBridge:
                         bufsize=1,
                     )
                 except OSError:
-                    # Fall back to wine path below when direct interop execution fails.
+                    # 直接実行に失敗した場合は、この後の wine 経路にフォールバックする。
                     pass
 
             wine = shutil.which("wine64") or shutil.which("wine")
             if not wine:
                 raise PermissionError(
                     "Windows .exe cannot be executed directly on Linux/macOS. "
-                    "Install wine and retry, run server app A on Windows host, "
+                    "Install wine and retry, run this USI bridge server on a Windows host, "
                     "or on WSL use a Windows path (e.g. /mnt/c/...) and enable interop."
                 )
             return subprocess.Popen(
@@ -349,6 +358,7 @@ class EngineBridge:
         )
 
     def _start_session(self) -> Session:
+        # Engine1プロセスと読取スレッドを作り、イベントをApp側へ配信する。
         sid = self._issue_session_id()
         proc = self._new_process()
         now_ms = self._now_ms()
@@ -409,6 +419,7 @@ class EngineBridge:
                             }
                         )
                 elif line.startswith("info "):
+                    # infoは高頻度で来るため、必要項目だけ抽出して即配信する。
                     self._publish(
                         {
                             "type": "usiInfo",
@@ -439,6 +450,7 @@ class EngineBridge:
         predicate: Callable[[str], Any],
         timeout_ms: int = 10_000,
     ) -> Any:
+        # 条件に一致する行だけを待ち受け、タイムアウト時は明示的に例外化する。
         waiter: queue.Queue[Any] = queue.Queue()
 
         def on_line(line: str) -> None:
@@ -465,6 +477,7 @@ class EngineBridge:
                 session.close_listeners.remove(on_close)
 
     def get_engine_info(self, timeout_seconds: int) -> dict[str, Any]:
+        # 使い捨てセッションで usi -> usiok まで問い合わせ、メタ情報を収集する。
         session = self._start_session()
         options: dict[str, Any] = {}
         name = "NO NAME"
@@ -521,6 +534,7 @@ class EngineBridge:
             self._send(session, "quit")
 
     def launch(self, enable_early_ponder: bool = False, options: list[dict[str, Any]] | None = None) -> int:
+        # 常駐セッションを起動し、受け取ったオプション値を起動時に反映する。
         session = self._start_session()
         with session.lock:
             self._send(session, "usi")
@@ -544,6 +558,7 @@ class EngineBridge:
         return session
 
     def ping(self, session_id: int) -> None:
+        # Webクライアントからの定期heartbeat受信時に監視時刻を更新する。
         session = self._get_session(session_id)
         now_ms = self._now_ms()
         session.last_heartbeat_ms = now_ms
@@ -559,6 +574,7 @@ class EngineBridge:
         }
 
     def ready(self, session_id: int) -> None:
+        # isready -> readyok を確認してから usinewgame を送る。
         session = self._get_session(session_id)
         with session.lock:
             self._send(session, "isready")
@@ -631,7 +647,7 @@ class EngineBridge:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "USIServerAppA/1.0"
+    server_version = "USIEngineBridgeServer/1.0"
 
     def _json(self, status: int, body: dict[str, Any]) -> None:
         payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
@@ -687,6 +703,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         bridge: EngineBridge = self.server.bridge  # type: ignore[attr-defined]
         try:
+            # WebクライアントからのAPI呼び出しを、EngineBridgeのメソッドへ1対1で中継する。
             data = self._read_json()
             if self.path == "/usi/get-engine-info":
                 timeout = int(data.get("timeoutSeconds", 10))

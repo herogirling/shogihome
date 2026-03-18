@@ -11,8 +11,7 @@ const ACTIVE_SESSIONS_STORAGE_KEY = "webUSIActiveSessions";
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_FAIL_LIMIT = 2;
 const DEFAULT_SERVER_URL =
-  (import.meta.env.VITE_USI_BRIDGE_DEFAULT_URL as string | undefined) ||
-  "http://127.0.0.1:22391";
+  (import.meta.env.VITE_USI_BRIDGE_DEFAULT_URL as string | undefined) || "http://127.0.0.1:22391";
 
 type PersistedUSISession = {
   sessionID: number;
@@ -64,6 +63,7 @@ const heartbeatTimers = new Map<number, number>();
 const heartbeatFailures = new Map<number, number>();
 
 function loadPersistedSessions(): PersistedUSISession[] {
+  // 前回ページで保持していたセッション情報を読み戻す。
   try {
     const raw = localStorage.getItem(ACTIVE_SESSIONS_STORAGE_KEY);
     if (!raw) {
@@ -80,11 +80,13 @@ function loadPersistedSessions(): PersistedUSISession[] {
 }
 
 function savePersistedSessions(): void {
+  // メモリ上の追跡情報を都度localStorageへ反映する。
   const sessions = Array.from(sessionMetaMap.values());
   localStorage.setItem(ACTIVE_SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
 }
 
 function removeSessionTracking(sessionID: number): void {
+  // 監視タイマー/失敗回数/メタ情報をまとめて破棄する。
   const timer = heartbeatTimers.get(sessionID);
   if (timer) {
     clearInterval(timer);
@@ -97,6 +99,7 @@ function removeSessionTracking(sessionID: number): void {
 }
 
 function markSessionActivity(sessionID: number): void {
+  // UI側の「最終更新時刻」表示に使う更新時刻を進める。
   const meta = sessionMetaMap.get(sessionID);
   if (!meta) {
     return;
@@ -106,6 +109,7 @@ function markSessionActivity(sessionID: number): void {
 }
 
 function updateSessionResumeCommand(sessionID: number, resume?: PersistedResumeCommand): void {
+  // 直近の go 系コマンドを保存し、再接続時に同じ探索を再投入できるようにする。
   const meta = sessionMetaMap.get(sessionID);
   if (!meta) {
     return;
@@ -116,6 +120,7 @@ function updateSessionResumeCommand(sessionID: number, resume?: PersistedResumeC
 }
 
 function getServerURL(): string {
+  // URLクエリ指定を最優先し、次にlocalStorage、最後にデフォルト値を使う。
   const params = new URL(window.location.toString()).searchParams;
   const fromQuery = params.get("usiBridgeURL");
   if (fromQuery) {
@@ -126,6 +131,7 @@ function getServerURL(): string {
 }
 
 function normalizeServerURL(pathOrURL: string): string {
+  // ユーザー入力は "IP:PORT" 形式を許容し、スキーム省略時は http を補う。
   const raw = pathOrURL.trim();
   if (!raw) {
     return getServerURL();
@@ -141,6 +147,7 @@ function toURL(serverURL: string, path: string): string {
 }
 
 async function postJSON<T>(serverURL: string, path: string, body: unknown): Promise<T> {
+  // すべてのHTTP POSTをここに集約し、エラー整形も共通化する。
   const response = await fetch(toURL(serverURL, path), {
     method: "POST",
     headers: {
@@ -165,6 +172,7 @@ async function postJSON<T>(serverURL: string, path: string, body: unknown): Prom
 }
 
 async function sendHeartbeat(sessionID: number): Promise<void> {
+  // 定期 heartbeat が一定回数連続で失敗したセッションは破棄する。
   const serverURL = getSessionServerURL(sessionID);
   try {
     await postJSON(serverURL, "/session/ping", { sessionID });
@@ -180,6 +188,7 @@ async function sendHeartbeat(sessionID: number): Promise<void> {
 }
 
 function ensureHeartbeat(sessionID: number): void {
+  // セッションごとに heartbeat タイマーは1本だけ作る。
   if (heartbeatTimers.has(sessionID)) {
     return;
   }
@@ -191,6 +200,7 @@ function ensureHeartbeat(sessionID: number): void {
 }
 
 function scheduleReconnect(serverURL: string): void {
+  // EventSource切断時の再接続を過剰に積まないよう、1URLにつき1本だけ予約する。
   if (reconnectTimers.has(serverURL)) {
     return;
   }
@@ -202,12 +212,14 @@ function scheduleReconnect(serverURL: string): void {
 }
 
 function connectEventStream(serverURL: string): void {
+  // 同じサーバーURLへのSSE接続は1本に制限する。
   if (eventSources.has(serverURL)) {
     return;
   }
   const eventSource = new EventSource(toURL(serverURL, "/events"));
   eventSources.set(serverURL, eventSource);
   eventSource.onmessage = (event) => {
+    // USIブリッジサーバーから流れてくるイベントを既存ハンドラ形式に変換して中継する。
     const message = JSON.parse(event.data) as {
       type: string;
       sessionID: number;
@@ -220,7 +232,12 @@ function connectEventStream(serverURL: string): void {
     };
     switch (message.type) {
       case "usiBestMove":
-        handlers.onBestMove?.(message.sessionID, message.usi || "", message.usiMove || "", message.ponder);
+        handlers.onBestMove?.(
+          message.sessionID,
+          message.usi || "",
+          message.usiMove || "",
+          message.ponder,
+        );
         break;
       case "usiCheckmate":
         handlers.onCheckmate?.(message.sessionID, message.usi || "", message.usiMoves || []);
@@ -251,10 +268,12 @@ function connectEventStream(serverURL: string): void {
 }
 
 function getSessionServerURL(sessionID: number): string {
+  // セッション作成時に確定したサーバーURLを優先し、未登録時は現在設定値へフォールバックする。
   return sessionServerMap.get(sessionID) || getServerURL();
 }
 
 async function replayResumedSession(meta: PersistedUSISession): Promise<void> {
+  // 復元時は保存していた最後の go 系コマンドを再送して探索状態を戻す。
   if (!meta.resume) {
     return;
   }
@@ -296,6 +315,7 @@ async function restoreSessionTrackingFromStorage(): Promise<void> {
     return;
   }
 
+  // 復元可否をユーザーに確認し、不要な場合はサーバー側セッションを終了する。
   const shouldResume = window.confirm(
     "前回のエンジンセッションが見つかりました。再接続して状態を復元しますか？",
   );
@@ -306,7 +326,7 @@ async function restoreSessionTrackingFromStorage(): Promise<void> {
         try {
           await postJSON(session.serverURL, "/usi/quit", { sessionID: session.sessionID });
         } catch {
-          // ignore; stale sessions are cleaned by server watchdog as fallback.
+          // 無視する。最終的に古いセッションはサーバー側の監視処理で回収される。
         }
       }),
     );
@@ -316,6 +336,7 @@ async function restoreSessionTrackingFromStorage(): Promise<void> {
 
   for (const session of restored) {
     try {
+      // サーバー側セッションが存続しているか確認してから追跡を再開する。
       await postJSON(session.serverURL, "/session/resume", { sessionID: session.sessionID });
       sessionServerMap.set(session.sessionID, session.serverURL);
       sessionMetaMap.set(session.sessionID, session);
@@ -335,6 +356,7 @@ window.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") {
     return;
   }
+  // タブ復帰時にSSE再接続とheartbeat送信を行い、切断状態を早期復旧する。
   const currentSessions = Array.from(sessionMetaMap.values());
   for (const session of currentSessions) {
     connectEventStream(session.serverURL);
@@ -343,6 +365,7 @@ window.addEventListener("visibilitychange", () => {
 });
 
 window.addEventListener("online", () => {
+  // オフライン復帰時に通信を即再開する。
   const currentSessions = Array.from(sessionMetaMap.values());
   for (const session of currentSessions) {
     connectEventStream(session.serverURL);
@@ -351,6 +374,7 @@ window.addEventListener("online", () => {
 });
 
 export function collectWebUSISessionStatesOnWeb(): USISessionState[] {
+  // Web版でもネイティブ版と同じモニタ表示データ構造で返す。
   return Array.from(sessionMetaMap.values()).map((session) => {
     return {
       sessionID: session.sessionID,
@@ -441,13 +465,11 @@ export async function sendUSIOptionButtonSignalOnWeb(
   });
 }
 
-export async function usiLaunchOnWeb(
-  engineJSON: string,
-  optionsJSON: string,
-): Promise<number> {
+export async function usiLaunchOnWeb(engineJSON: string, optionsJSON: string): Promise<number> {
   const engine = JSON.parse(engineJSON) as USIEngine;
   const options = JSON.parse(optionsJSON) as USIEngineLaunchOptions;
   const serverURL = normalizeServerURL(engine.path);
+  // 起動直後からSSE監視とheartbeatを有効化し、切断検知と復元データ保存を開始する。
   connectEventStream(serverURL);
   const response = await postJSON<{ sessionID: number }>(serverURL, "/usi/launch", {
     engine,
