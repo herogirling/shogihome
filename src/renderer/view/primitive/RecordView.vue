@@ -85,7 +85,7 @@
           </button>
         </div>
       </div>
-      <div v-if="branchListMode !== BranchListMode.NEXT_MOVE" class="column branch-side-control">
+      <div v-if="branchListMode !== BranchListMode.NEXT_MOVE" class="branch-side-control">
         <button :disabled="!operational" @click="swapWithPreviousBranch()">
           <Icon :icon="IconType.ARROW_UP" />
         </button>
@@ -387,12 +387,18 @@ onUpdated(() => {
   padding: 2px;
 }
 .branch-side-control {
-  width: 40px;
+  margin-left: auto;
+  width: auto;
+  min-width: 80px;
   height: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: flex-end;
 }
 .branch-side-control button {
-  height: 50%;
-  width: 100%;
+  height: 100%;
+  width: 40px;
   padding: 0;
 }
 .branch-side-control button .icon {
