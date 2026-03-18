@@ -41,7 +41,11 @@ import { calculateGameStatistics, GameResults, SPRTSummary } from "@/renderer/ga
 import { CSAGameManager, CSAGameState } from "@/renderer/game/csa.js";
 import { Clock } from "@/renderer/game/clock.js";
 import { generateRecordFileName, join } from "@/renderer/helpers/path.js";
-import { ResearchSettings } from "@/common/settings/research.js";
+import {
+  ResearchSettings,
+  normalizeResearchSettings,
+  validateResearchSettings,
+} from "@/common/settings/research.js";
 import { USIPlayerMonitor, USIMonitor } from "./usi.js";
 import { AppState, ResearchState } from "@/common/control/state.js";
 import { useMessageStore } from "./message.js";
@@ -167,6 +171,7 @@ class Store {
   private mateSearchManager = new MateSearchManager();
   private _researchState = ResearchState.IDLE;
   private researchManager = new ResearchManager();
+  private ensuringResearchFromSavedSettings = false;
   private _reactive: UnwrapNestedRefs<Store>;
   private garbledNotified = false;
   private onChangePositionHandlers: ChangePositionHandler[] = [];
@@ -516,6 +521,10 @@ class Store {
 
   get candidates(): CandidateMove[] {
     const appSettings = useAppSettings();
+    // 盤面矢印表示を無効化した場合は候補を計算しない。
+    if (!appSettings.showEnginePVOnBoard) {
+      return [];
+    }
     const maxScoreDiff = appSettings.arrowScoreDiffRange;
     const sfen = this.recordManager.record.position.sfen;
     // 優先度1: 検討の第1エンジン（研究セッションの中で最小の sessionID）
@@ -927,18 +936,22 @@ class Store {
   }
 
   startResearch(researchSettings: ResearchSettings): void {
+    // 明示的に検討ダイアログを開いた場合のみ開始を許可し、誤起動を防ぐ。
     if (this._researchState !== ResearchState.STARTUP_DIALOG || useBusyState().isBusy) {
       return;
     }
+    // 起動完了まで操作を抑止するため、最初にbusyを確保する。
     useBusyState().retain();
     if (!researchSettings.usi) {
       useErrorStore().add(new Error("エンジンが設定されていません。"));
+      useBusyState().release();
       return;
     }
     api
       .saveResearchSettings(researchSettings)
       .then(() => this.researchManager.launch(researchSettings))
       .then(() => {
+        // 起動成功後にRUNNINGへ遷移し、現在局面で探索を開始する。
         this._researchState = ResearchState.RUNNING;
         this.updateResearchPosition();
         const appSettings = useAppSettings();
@@ -949,6 +962,7 @@ class Store {
           appSettings.tab !== Tab.PERCENTAGE_CHART &&
           appSettings.tab !== Tab.MONITOR
         ) {
+          // 検討開始時はPVタブを優先表示して、結果が見える状態にそろえる。
           useAppSettings().updateAppSettings({ tab: Tab.PV });
         }
       })
@@ -1082,6 +1096,52 @@ class Store {
 
   private updateResearchPosition(): void {
     this.researchManager?.updatePosition(this.recordManager.record);
+  }
+
+  ensureResearchAtCurrentPosition(opt?: { notifyOnError?: boolean }): void {
+    // 実行中なら局面同期のみ行う。
+    if (this._researchState === ResearchState.RUNNING) {
+      this.updateResearchPosition();
+      return;
+    }
+    if (
+      this._researchState !== ResearchState.IDLE ||
+      this.appState !== AppState.NORMAL ||
+      useBusyState().isBusy ||
+      this.ensuringResearchFromSavedSettings
+    ) {
+      return;
+    }
+    this.ensuringResearchFromSavedSettings = true;
+    const notifyOnError = !!opt?.notifyOnError;
+    // 保存済み設定を読み出し、現在局面で再開可能なら自動で検討を起動する。
+    api
+      .loadResearchSettings()
+      .then((loaded) => {
+        const settings = normalizeResearchSettings(loaded);
+        const error = validateResearchSettings(settings);
+        if (error) {
+          if (notifyOnError) {
+            useErrorStore().add(error);
+          }
+          return;
+        }
+        if (!settings.usi) {
+          if (notifyOnError) {
+            useErrorStore().add(new Error("エンジンが設定されていません。"));
+          }
+          return;
+        }
+        this.startResearch(settings);
+      })
+      .catch((e) => {
+        if (notifyOnError) {
+          useErrorStore().add(e);
+        }
+      })
+      .finally(() => {
+        this.ensuringResearchFromSavedSettings = false;
+      });
   }
 
   resetRecord(mode: "keepRootPosition" | "hirateSetup" = "keepRootPosition"): void {
@@ -1326,15 +1386,16 @@ class Store {
   pasteRecord(
     data: string,
     mode: "standard" | "mergeIntoRoot" | "mergeIntoCurrent" = "standard",
-  ): void {
+  ): boolean {
     if (this.appState !== AppState.NORMAL) {
-      return;
+      return false;
     }
     const error = this.recordManager.importRecord(data.trim(), { mode });
     if (error) {
       useErrorStore().add(error);
-      return;
+      return false;
     }
+    return true;
   }
 
   openRecord(path?: string, opt?: { ply?: number }): void {

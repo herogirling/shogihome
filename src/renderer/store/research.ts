@@ -130,6 +130,8 @@ export class ResearchManager {
         if (engine.paused) {
           return;
         }
+        // stop を毎回挟むと既存仕様（無制限検討時の stop 非送信）を崩すため、
+        // ここでは startResearch のみ再投入して従来挙動を維持する。
         engine.usi.startResearch(record.position, record.usi).catch((e) => {
           this.onError(e);
         });
