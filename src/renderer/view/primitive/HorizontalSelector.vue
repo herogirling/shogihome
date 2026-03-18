@@ -7,9 +7,14 @@
           :name="name"
           :checked="item.value === value"
           :value="item.value"
+          @click="emit('tap', item.value)"
           @change="emit('update:value', item.value)"
         />
-        <div class="button" :style="buttonStyle">
+        <div
+          class="button"
+          :class="{ highlighted: highlightedValues.includes(item.value) }"
+          :style="buttonStyle"
+        >
           <div class="label">{{ item.label }}</div>
         </div>
       </div>
@@ -43,9 +48,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  highlightedValues: {
+    type: Array as PropType<string[]>,
+    default: () => [],
+  },
 });
 const emit = defineEmits<{
   "update:value": [value: string];
+  tap: [value: string];
 }>();
 
 const container = ref() as Ref<HTMLDivElement>;
@@ -63,6 +73,7 @@ const buttonStyle = computed(() => {
 });
 
 const setValue = (value: string) => {
+  // v-model 更新前にDOMのchecked状態も同期し、外部からの値変更でも表示ズレを防ぐ。
   for (const input of container.value.querySelectorAll("input")) {
     if (input.value === value) {
       input.checked = true;
@@ -72,6 +83,7 @@ const setValue = (value: string) => {
   }
 };
 const getValue = () => {
+  // checkedが見つからないケース（初期描画直後など）はprops値をフォールバックで返す。
   const checked = Array.from(container.value.querySelectorAll("input")).find((input) => {
     if (input.checked) {
       return input.value;
@@ -132,6 +144,13 @@ input:checked ~ .button {
   color: var(--pushed-selector-color);
   border: 2px solid var(--pushed-selector-bg-color);
   background-color: var(--pushed-selector-bg-color);
+}
+
+.button.highlighted {
+  /* 推奨または実行中の項目を通常選択色とは別に強調する。 */
+  color: #fff;
+  border-color: #b22222;
+  background-color: #b22222;
 }
 input:focus ~ .button {
   border: 2px solid white;

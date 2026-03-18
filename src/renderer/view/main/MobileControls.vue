@@ -32,11 +32,17 @@ const isMobileMenuVisible = ref(false);
 </script>
 
 <style scoped>
+.controls {
+  overflow: hidden;
+}
+
 .controls button {
   font-size: 100%;
   width: 100%;
   height: 100%;
+  min-width: 0;
 }
+
 .controls button .icon {
   height: 68%;
 }

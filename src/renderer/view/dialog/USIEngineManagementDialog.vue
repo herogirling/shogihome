@@ -295,22 +295,40 @@ const mergeCancel = () => {
 </script>
 
 <style scoped>
+/* 一覧領域を可変にして、ダイアログ全体の高さを超えないようにする。 */
+:deep(.frame) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.form-group {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .engine-list {
-  width: 740px;
-  height: calc(100vh - 280px);
-  max-height: 600px;
+  width: min(740px, calc(100dvw - 20px));
+  height: min(600px, calc(100dvh - 240px));
+  min-height: 0;
+  flex: 1;
   overflow: auto;
 }
 .engine-filter {
   margin: 0px 5px 5px 5px;
   text-align: left;
   align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .filter-words {
-  width: 200px;
+  width: min(280px, 100%);
 }
 .filter-tags {
-  width: 540px;
+  flex: 1 1 280px;
   flex-wrap: wrap;
 }
 .filter-tag {
@@ -329,6 +347,10 @@ const mergeCancel = () => {
   margin-left: 5px;
 }
 .engine {
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
   margin: 0px 5px 0px 5px;
   padding: 5px;
   border-bottom: 1px solid gray;
@@ -338,7 +360,7 @@ const mergeCancel = () => {
 }
 .engine-name {
   text-align: left;
-  width: 450px;
+  width: min(450px, 100%);
   margin-top: 5px;
   margin-right: 10px;
   white-space: nowrap;
@@ -346,7 +368,7 @@ const mergeCancel = () => {
   text-overflow: ellipsis;
 }
 .tags {
-  width: 450px;
+  width: min(450px, 100%);
   flex-wrap: wrap;
 }
 .tag {
@@ -364,5 +386,47 @@ const mergeCancel = () => {
 }
 .tag .icon {
   width: 16px;
+}
+
+.menu {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* モバイルでは行内要素を折り返し、下部ボタンを常時操作可能にする。 */
+@media (max-width: 800px) {
+  :deep(.frame) {
+    padding-bottom: 0;
+  }
+
+  .engine-list {
+    width: 100%;
+    height: auto;
+  }
+
+  .engine-name,
+  .tags {
+    width: 100%;
+  }
+
+  .engine .row.space-evenly {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .menu > *:not(:first-child) {
+    margin-left: 0;
+  }
+
+  .main-buttons {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    background-color: var(--dialog-bg-color);
+    margin: 0;
+    padding: 8px 0 calc(env(safe-area-inset-bottom, 0px) + 8px) 0;
+    border-top: 1px solid var(--dialog-border-color);
+  }
 }
 </style>

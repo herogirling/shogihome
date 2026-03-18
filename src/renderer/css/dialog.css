@@ -119,6 +119,19 @@ dialog .main-buttons button {
   padding: 5px 25px 5px 25px;
 }
 
+/* モバイルでは主ボタンを常に下端に固定して、長いフォームでも操作を失わないようにする。 */
+@media (max-width: 800px) {
+  dialog:not(.message-box) .main-buttons {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    margin-top: 0;
+    padding: 8px 0 calc(env(safe-area-inset-bottom, 0px) + 8px) 0;
+    border-top: 1px solid var(--dialog-border-color);
+    background-color: var(--dialog-bg-color);
+  }
+}
+
 dialog .icon {
   width: 36px;
 }

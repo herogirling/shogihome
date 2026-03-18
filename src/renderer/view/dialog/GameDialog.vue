@@ -634,10 +634,13 @@ const selectAutoSaveDirectory = async () => {
   text-align: center;
 }
 .full-column {
-  width: 580px;
+  width: min(580px, 100%);
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .half-column {
-  width: 280px;
+  width: calc(50% - 6px);
+  min-width: 0;
 }
 .players-control {
   width: 100%;
@@ -674,5 +677,50 @@ input.number.small {
 }
 .sfen {
   width: 100%;
+}
+
+/* 2カラム前提の項目をモバイルでは1カラムへ切り替え、はみ出しを防ぐ。 */
+@media (max-width: 800px) {
+  :deep(.frame) {
+    overflow: auto;
+    padding-bottom: 0;
+  }
+
+  .mode-selector {
+    position: static;
+    transform: none;
+    margin-top: 6px;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .full-column {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .half-column {
+    width: 100%;
+  }
+
+  .full-column > .row {
+    flex-direction: column;
+  }
+
+  .full-column :deep(.form-item) {
+    margin: 6px 0;
+  }
+
+  .full-column :deep(.form-item-label) {
+    width: 80px;
+  }
+
+  .full-column :deep(.form-item-small-label) {
+    margin: 0 4px;
+  }
+
+  .players-control > * {
+    margin-top: 3px;
+  }
 }
 </style>

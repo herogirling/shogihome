@@ -8,29 +8,35 @@
         </button>
       </div>
       <div class="group">
-        <button v-if="!playerURI" @click="selectPlayer(uri.ES_BASIC_ENGINE_STATIC_ROOK_V1)">
-          <Icon :icon="IconType.ROBOT" />
-          <div class="label">{{ `${t.beginner} (${t.staticRook})` }}</div>
-        </button>
-        <button v-if="!playerURI" @click="selectPlayer(uri.ES_BASIC_ENGINE_RANGING_ROOK_V1)">
-          <Icon :icon="IconType.ROBOT" />
-          <div class="label">{{ `${t.beginner} (${t.rangingRook})` }}</div>
-        </button>
-        <button v-if="playerURI" @click="selectTurn(Color.BLACK)">
-          <Icon :icon="IconType.GAME" />
-          <div class="label">{{ t.sente }}</div>
-        </button>
-        <button v-if="playerURI" @click="selectTurn(Color.WHITE)">
-          <Icon :icon="IconType.GAME" />
-          <div class="label">{{ t.gote }}</div>
-        </button>
-        <button
-          v-if="playerURI"
-          @click="selectTurn(Math.random() * 2 >= 1 ? Color.BLACK : Color.WHITE)"
-        >
-          <Icon :icon="IconType.GAME" />
-          <div class="label">{{ t.pieceToss }}</div>
-        </button>
+        <template v-if="!playerURI">
+          <button @click="selectPlayer(uri.ES_BASIC_ENGINE_STATIC_ROOK_V1)">
+            <Icon :icon="IconType.ROBOT" />
+            <div class="label">{{ `${t.beginner} (${t.staticRook})` }}</div>
+          </button>
+          <button @click="selectPlayer(uri.ES_BASIC_ENGINE_RANGING_ROOK_V1)">
+            <Icon :icon="IconType.ROBOT" />
+            <div class="label">{{ `${t.beginner} (${t.rangingRook})` }}</div>
+          </button>
+          <!-- playerURI が空の間だけ候補エンジン一覧を表示する。 -->
+          <button v-for="engine of gameEngines" :key="engine.uri" @click="selectPlayer(engine.uri)">
+            <Icon :icon="IconType.ROBOT" />
+            <div class="label">{{ engine.name }}</div>
+          </button>
+        </template>
+        <template v-else>
+          <button @click="selectTurn(Color.BLACK)">
+            <Icon :icon="IconType.GAME" />
+            <div class="label">{{ t.sente }}</div>
+          </button>
+          <button @click="selectTurn(Color.WHITE)">
+            <Icon :icon="IconType.GAME" />
+            <div class="label">{{ t.gote }}</div>
+          </button>
+          <button @click="selectTurn(Math.random() * 2 >= 1 ? Color.BLACK : Color.WHITE)">
+            <Icon :icon="IconType.GAME" />
+            <div class="label">{{ t.pieceToss }}</div>
+          </button>
+        </template>
       </div>
     </dialog>
   </div>
@@ -46,12 +52,17 @@ import { installHotKeyForDialog, uninstallHotKeyForDialog } from "@/renderer/dev
 import { showModalDialog } from "@/renderer/helpers/dialog";
 import { useStore } from "@/renderer/store";
 import { Color, InitialPositionType } from "tsshogi";
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { SearchCommentFormat } from "@/common/settings/comment";
+import api from "@/renderer/ipc/api";
+import { getPredefinedUSIEngineTag, USIEngine, USIEngines } from "@/common/settings/usi";
+import { PlayerSettings } from "@/common/settings/player";
+import { useErrorStore } from "@/renderer/store/error";
 
 const store = useStore();
 const dialog = ref();
 const playerURI = ref("");
+const usiEngines = ref(new USIEngines());
 const emit = defineEmits<{
   close: [];
 }>();
@@ -61,16 +72,54 @@ const onClose = () => {
 onMounted(() => {
   showModalDialog(dialog.value, onClose);
   installHotKeyForDialog(dialog.value);
+  api
+    .loadUSIEngines()
+    .then((engines) => {
+      usiEngines.value = engines;
+    })
+    .catch((e) => {
+      useErrorStore().add(e);
+    });
 });
 onBeforeUnmount(() => {
   uninstallHotKeyForDialog(dialog.value);
 });
 const selectPlayer = (uri: string) => {
+  // 先に相手側プレイヤーを確定し、次の画面で先後選択へ進む。
   playerURI.value = uri;
 };
+
+const gameTag = computed(() => getPredefinedUSIEngineTag("game"));
+
+const gameEngines = computed(() => {
+  // 対局用タグが付いたエンジンだけを表示して誤選択を減らす。
+  return usiEngines.value.engineList
+    .filter((engine) => (engine.tags || []).includes(gameTag.value))
+    .map((engine) => ({
+      uri: engine.uri,
+      name: engine.name || engine.defaultName,
+    }));
+});
+
+const buildPlayerSettings = (playerURI: string): PlayerSettings => {
+  if (uri.isUSIEngine(playerURI) && usiEngines.value.hasEngine(playerURI)) {
+    const engine = usiEngines.value.getEngine(playerURI) as USIEngine;
+    return {
+      name: engine.name,
+      uri: playerURI,
+      usi: engine,
+    };
+  }
+  return {
+    name: uri.isBasicEngine(playerURI) ? uri.basicEngineName(playerURI) : t.human,
+    uri: playerURI,
+  };
+};
+
 const selectTurn = (turn: Color) => {
-  let black = { name: t.human, uri: uri.ES_HUMAN };
-  let white = { name: uri.basicEngineName(playerURI.value), uri: playerURI.value };
+  // playerURI には先に選んだ相手を保持しており、選択した先後に合わせて入れ替える。
+  let black = buildPlayerSettings(uri.ES_HUMAN);
+  let white = buildPlayerSettings(playerURI.value);
   if (turn === Color.WHITE) {
     [black, white] = [white, black];
   }

@@ -35,6 +35,8 @@ onBeforeUnmount(() => {
 dialog {
   width: calc(100vw - 3px - 2em);
   height: calc(100vh - 3px - 2em);
+  max-width: none;
+  max-height: none;
   border: none;
   box-shadow: none;
   background-color: transparent;
@@ -66,5 +68,29 @@ dialog {
 .frame.limited {
   max-width: 100%;
   max-height: 100%;
+}
+
+/* モバイルではダイアログを画面全体に拡張し、内部だけスクロールさせる。 */
+@media (max-width: 800px) {
+  dialog {
+    position: fixed;
+    inset: 0;
+    width: 100dvw;
+    height: 100dvh;
+    min-width: 100dvw;
+    min-height: 100dvh;
+    max-width: 100dvw;
+    max-height: 100dvh;
+    margin: 0;
+    padding: 0;
+  }
+
+  .frame {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    border: none;
+    padding: 10px;
+  }
 }
 </style>
