@@ -17,6 +17,32 @@ import { emptyLayoutProfileList } from "@/common/settings/layout.js";
 import * as uri from "@/common/uri.js";
 import { basename } from "@/renderer/helpers/path.js";
 import { ProcessArgs } from "@/common/ipc/process";
+import { getPieceImageAssetNameByIndex } from "@/common/assets/pieces.js";
+import {
+  collectWebUSISessionStatesOnWeb,
+  getUSIEngineInfoOnWeb,
+  getUSIEngineMetadataOnWeb,
+  sendUSIOptionButtonSignalOnWeb,
+  setUSIBestMoveHandler,
+  setUSICheckmateHandler,
+  setUSICheckmateNotImplementedHandler,
+  setUSICheckmateTimeoutHandler,
+  setUSIInfoHandler,
+  setUSINoMateHandler,
+  showSelectUSIEngineDialogOnWeb,
+  usiGameoverOnWeb,
+  usiGoInfiniteOnWeb,
+  usiGoMateOnWeb,
+  usiGoOnWeb,
+  usiGoPonderOnWeb,
+  usiLaunchOnWeb,
+  usiPonderHitOnWeb,
+  usiQuitOnWeb,
+  usiReadyOnWeb,
+  usiSetOptionOnWeb,
+  usiStopOnWeb,
+  WEB_USI_ENGINES_STORAGE_KEY,
+} from "@/renderer/ipc/web_usi_bridge.js";
 
 enum STORAGE_KEY {
   APP_SETTINGS = "appSetting",
@@ -29,6 +55,87 @@ enum STORAGE_KEY {
 }
 
 const fileCache = new Map<string, ArrayBuffer>();
+const WEB_PIECE_MAP_PREFIX = "piece-map://";
+const PIECE_MARGIN_RATIO = 0.05;
+
+function selectSingleImageAsDataURL(): Promise<string> {
+  const input = document.createElement("input");
+  input.setAttribute("type", "file");
+  input.setAttribute("accept", "image/*");
+  return new Promise<string>((resolve, reject) => {
+    input.click();
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) {
+        resolve("");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result;
+        if (typeof result === "string") {
+          resolve(result);
+          return;
+        }
+        reject(new Error("failed to read selected image"));
+      };
+      reader.onerror = () => reject(new Error("failed to read selected image"));
+      reader.readAsDataURL(file);
+    };
+    input.oncancel = () => {
+      resolve("");
+    };
+  });
+}
+
+function loadImageElement(src: string): Promise<HTMLImageElement> {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("failed to load image"));
+    image.src = src;
+  });
+}
+
+function cropSpriteToPieceMap(src: HTMLImageElement, deleteMargin: boolean): string {
+  const cellWidth = src.width / 8;
+  const cellHeight = src.height / 4;
+  if (
+    !Number.isFinite(cellWidth) ||
+    !Number.isFinite(cellHeight) ||
+    cellWidth <= 0 ||
+    cellHeight <= 0
+  ) {
+    throw new Error("cannot get image metadata");
+  }
+  const pieceMap: Record<string, string> = {};
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("canvas is not available");
+  }
+
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 8; col++) {
+      if ((row === 1 && col === 3) || (row === 3 && col === 3)) {
+        continue;
+      }
+      const assetName = getPieceImageAssetNameByIndex(row, col);
+      const marginRatio = deleteMargin ? PIECE_MARGIN_RATIO : 0;
+      const x = cellWidth * col + cellWidth * marginRatio;
+      const y = cellHeight * row + cellHeight * marginRatio;
+      const w = cellWidth * (1 - marginRatio * 2);
+      const h = cellHeight * (1 - marginRatio * 2);
+      canvas.width = Math.max(1, Math.round(w));
+      canvas.height = Math.max(1, Math.round(h));
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(src, x, y, w, h, 0, 0, canvas.width, canvas.height);
+      pieceMap[assetName] = canvas.toDataURL("image/png");
+    }
+  }
+
+  return WEB_PIECE_MAP_PREFIX + encodeURIComponent(JSON.stringify(pieceMap));
+}
 
 // Electron を使わずにシンプルな Web アプリケーションとして実行した場合に使用します。
 export const webAPI: Bridge = {
@@ -151,10 +258,14 @@ export const webAPI: Bridge = {
     localStorage.setItem(STORAGE_KEY.MATE_SEARCH_SETTINGS, json);
   },
   async loadUSIEngines(): Promise<string> {
-    return new USIEngines().json;
+    const json = localStorage.getItem(WEB_USI_ENGINES_STORAGE_KEY);
+    if (!json) {
+      return new USIEngines().json;
+    }
+    return json;
   },
-  async saveUSIEngines(): Promise<void> {
-    // Do Nothing
+  async saveUSIEngines(json: string): Promise<void> {
+    localStorage.setItem(WEB_USI_ENGINES_STORAGE_KEY, json);
   },
   async loadBookImportSettings(): Promise<string> {
     throw new Error(t.thisFeatureNotAvailableOnWebApp);
@@ -289,67 +400,71 @@ export const webAPI: Bridge = {
 
   // USI
   async showSelectUSIEngineDialog(): Promise<string> {
-    throw new Error(t.thisFeatureNotAvailableOnWebApp);
+    return await showSelectUSIEngineDialogOnWeb();
   },
-  async getUSIEngineInfo(): Promise<string> {
-    throw new Error(t.thisFeatureNotAvailableOnWebApp);
+  async getUSIEngineInfo(path: string, timeoutSeconds: number): Promise<string> {
+    return await getUSIEngineInfoOnWeb(path, timeoutSeconds);
   },
-  async getUSIEngineMetadata(): Promise<string> {
-    throw new Error(t.thisFeatureNotAvailableOnWebApp);
+  async getUSIEngineMetadata(path: string): Promise<string> {
+    return await getUSIEngineMetadataOnWeb(path);
   },
-  async sendUSIOptionButtonSignal(): Promise<void> {
-    // Do Nothing
+  async sendUSIOptionButtonSignal(
+    path: string,
+    name: string,
+    timeoutSeconds: number,
+  ): Promise<void> {
+    await sendUSIOptionButtonSignalOnWeb(path, name, timeoutSeconds);
   },
-  async usiLaunch(): Promise<number> {
-    throw new Error(t.thisFeatureNotAvailableOnWebApp);
+  async usiLaunch(json: string, options: string): Promise<number> {
+    return await usiLaunchOnWeb(json, options);
   },
-  async usiReady(): Promise<void> {
-    // Do Nothing
+  async usiReady(sessionID: number): Promise<void> {
+    await usiReadyOnWeb(sessionID);
   },
-  async usiSetOption(): Promise<void> {
-    // Do Nothing
+  async usiSetOption(sessionID: number, name: string, value: string): Promise<void> {
+    await usiSetOptionOnWeb(sessionID, name, value);
   },
-  async usiGo(): Promise<void> {
-    // Do Nothing
+  async usiGo(sessionID: number, usi: string, timeStatesJSON: string): Promise<void> {
+    await usiGoOnWeb(sessionID, usi, timeStatesJSON);
   },
-  async usiGoPonder(): Promise<void> {
-    // Do Nothing
+  async usiGoPonder(sessionID: number, usi: string, timeStatesJSON: string): Promise<void> {
+    await usiGoPonderOnWeb(sessionID, usi, timeStatesJSON);
   },
-  async usiPonderHit(): Promise<void> {
-    // Do Nothing
+  async usiPonderHit(sessionID: number, timeStatesJSON: string): Promise<void> {
+    await usiPonderHitOnWeb(sessionID, timeStatesJSON);
   },
-  async usiGoInfinite(): Promise<void> {
-    // Do Nothing
+  async usiGoInfinite(sessionID: number, usi: string): Promise<void> {
+    await usiGoInfiniteOnWeb(sessionID, usi);
   },
-  async usiGoMate(): Promise<void> {
-    // Do Nothing
+  async usiGoMate(sessionID: number, usi: string, maxSeconds?: number): Promise<void> {
+    await usiGoMateOnWeb(sessionID, usi, maxSeconds);
   },
-  async usiStop(): Promise<void> {
-    // Do Nothing
+  async usiStop(sessionID: number): Promise<void> {
+    await usiStopOnWeb(sessionID);
   },
-  async usiGameover(): Promise<void> {
-    // Do Nothing
+  async usiGameover(sessionID: number, result): Promise<void> {
+    await usiGameoverOnWeb(sessionID, result);
   },
-  async usiQuit(): Promise<void> {
-    // Do Nothing
+  async usiQuit(sessionID: number): Promise<void> {
+    await usiQuitOnWeb(sessionID);
   },
-  onUSIBestMove(): void {
-    // Do Nothing
+  onUSIBestMove(callback): void {
+    setUSIBestMoveHandler(callback);
   },
-  onUSICheckmate(): void {
-    // Do Nothing
+  onUSICheckmate(callback): void {
+    setUSICheckmateHandler(callback);
   },
-  onUSICheckmateNotImplemented(): void {
-    // Do Nothing
+  onUSICheckmateNotImplemented(callback): void {
+    setUSICheckmateNotImplementedHandler(callback);
   },
-  onUSICheckmateTimeout(): void {
-    // Do Nothing
+  onUSICheckmateTimeout(callback): void {
+    setUSICheckmateTimeoutHandler(callback);
   },
-  onUSINoMate(): void {
-    // Do Nothing
+  onUSINoMate(callback): void {
+    setUSINoMateHandler(callback);
   },
-  onUSIInfo(): void {
-    // Do Nothing
+  onUSIInfo(callback): void {
+    setUSIInfoHandler(callback);
   },
 
   // CSA
@@ -397,7 +512,7 @@ export const webAPI: Bridge = {
   async collectSessionStates(): Promise<string> {
     return JSON.stringify({
       os: blankOSState(),
-      usiSessions: [],
+      usiSessions: collectWebUSISessionStatesOnWeb(),
       csaSessions: [],
     } as SessionStates);
   },
@@ -416,10 +531,14 @@ export const webAPI: Bridge = {
 
   // Images
   async showSelectImageDialog(): Promise<string> {
-    throw new Error(t.thisFeatureNotAvailableOnWebApp);
+    return await selectSingleImageAsDataURL();
   },
-  async cropPieceImage(): Promise<string> {
-    throw new Error(t.thisFeatureNotAvailableOnWebApp);
+  async cropPieceImage(srcURL: string, deleteMargin: boolean): Promise<string> {
+    if (!srcURL) {
+      throw new Error("invalid image URL");
+    }
+    const image = await loadImageElement(srcURL);
+    return cropSpriteToPieceMap(image, deleteMargin);
   },
   async exportCaptureAsPNG(): Promise<void> {
     throw new Error(t.thisFeatureNotAvailableOnWebApp);
@@ -447,12 +566,14 @@ export const webAPI: Bridge = {
     // Do Nothing
   },
   log(level: LogLevel, message: string): void {
+    // Web版ではローカルファイル出力がないため、ブラウザコンソールへレベル別に出力する。
     switch (level) {
       case LogLevel.DEBUG:
         console.debug(message);
         break;
       case LogLevel.INFO:
-        console.log(message);
+        // レビュー時にデバッグ混入と誤認されにくいよう、INFO レベルは console.info を使う。
+        console.info(message);
         break;
       case LogLevel.WARN:
         console.warn(message);
@@ -474,6 +595,7 @@ export const webAPI: Bridge = {
     // DO NOTHING
   },
   openWebBrowser(url: string) {
+    // Web版は OS 依存APIを使えないため、新規タブで開く。
     window.open(url, "_blank");
   },
   async getMachineSpec(): Promise<string> {

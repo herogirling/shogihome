@@ -25,16 +25,16 @@
           {{ t.remove }}
         </button>
       </div>
-      <div v-if="cpuUsage > 1.0" class="form-group danger">
+      <div v-if="showResourceWarnings && cpuUsage > 1.0" class="form-group danger">
         <div class="note">{{ t.totalNumberOfThreadsExceedsNPercentOfCpuCores(100) }}</div>
       </div>
-      <div v-else-if="cpuUsage > 0.75" class="form-group warning">
+      <div v-else-if="showResourceWarnings && cpuUsage > 0.75" class="form-group warning">
         <div class="note">{{ t.totalNumberOfThreadsExceedsNPercentOfCpuCores(75) }}</div>
       </div>
-      <div v-if="memoryUsage > 1.0" class="form-group danger">
+      <div v-if="showResourceWarnings && memoryUsage > 1.0" class="form-group danger">
         <div class="note">{{ t.totalUSIHashExceedsNPercentOfMemory(100) }}</div>
       </div>
-      <div v-else-if="memoryUsage > 0.9" class="form-group warning">
+      <div v-else-if="showResourceWarnings && memoryUsage > 0.9" class="form-group warning">
         <div class="note">{{ t.totalUSIHashExceedsNPercentOfMemory(90) }}</div>
       </div>
       <button class="center thin" @click="secondaryEngineURIs.push('')">
@@ -152,6 +152,9 @@ function loadMetadataIfNeeded(uri: string) {
 }
 
 const cpuUsage = computed(() => {
+  if (!showResourceWarnings.value || machineSpec.value.cpuCores === 0) {
+    return 0;
+  }
   let threadsSum = 0;
   for (const uri of [engineURI.value, ...secondaryEngineURIs.value]) {
     const engine = engines.value.getEngine(uri);
@@ -160,7 +163,7 @@ const cpuUsage = computed(() => {
     }
     const threads = getUSIEngineThreads(engine);
     const metadata = engineMetadataMap.get(uri);
-    if (typeof threads === "number" && metadata && !metadata.isShellScript) {
+    if (typeof threads === "number" && metadata && !metadata.isShellScript && !metadata.isRemote) {
       threadsSum += threads;
     }
   }
@@ -168,6 +171,9 @@ const cpuUsage = computed(() => {
 });
 
 const memoryUsage = computed(() => {
+  if (!showResourceWarnings.value || machineSpec.value.memory === 0) {
+    return 0;
+  }
   let usiHashSum = 0;
   for (const uri of [engineURI.value, ...secondaryEngineURIs.value]) {
     const engine = engines.value.getEngine(uri);
@@ -176,11 +182,27 @@ const memoryUsage = computed(() => {
     }
     const usiHash = getUSIEngineOptionCurrentValue(engine.options[USIHash]);
     const metadata = engineMetadataMap.get(uri);
-    if (typeof usiHash === "number" && metadata && !metadata.isShellScript) {
+    if (typeof usiHash === "number" && metadata && !metadata.isShellScript && !metadata.isRemote) {
       usiHashSum += usiHash;
     }
   }
   return (usiHashSum * 1024) / machineSpec.value.memory;
+});
+
+const showResourceWarnings = computed(() => {
+  const selectedEngineURIs = [engineURI.value, ...secondaryEngineURIs.value].filter((uri) => {
+    return !!engines.value.getEngine(uri);
+  });
+  if (selectedEngineURIs.length === 0) {
+    return false;
+  }
+  for (const uri of selectedEngineURIs) {
+    const metadata = engineMetadataMap.get(uri);
+    if (!metadata || metadata.isShellScript || metadata.isRemote) {
+      return false;
+    }
+  }
+  return true;
 });
 
 const onStart = () => {
@@ -216,7 +238,9 @@ const onUpdatePlayerSettings = async (val: USIEngines) => {
 
 <style scoped>
 .root {
-  width: 450px;
+  width: min(450px, calc(100dvw - 20px));
+  max-height: calc(100dvh - 20px);
+  overflow: auto;
 }
 .remove-button {
   margin-top: 5px;
@@ -224,5 +248,12 @@ const onUpdatePlayerSettings = async (val: USIEngines) => {
 input.number {
   text-align: right;
   width: 80px;
+}
+
+@media (max-width: 800px) {
+  .root {
+    width: 100%;
+    max-height: 100%;
+  }
 }
 </style>
